@@ -1,0 +1,57 @@
+# Root Git Ignore Configuration
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment and Credentials Files
+.env
+.env.*
+!.env.example
+*.env
+Backend/.env
+Backend/.env.*
+!Backend/.env.example
+Frontend/.env
+Frontend/.env.*
+!Frontend/.env.example
+config/firebase-service-account.json
+Backend/config/firebase-service-account.json
+
+# Uploads & Media
+uploads/
+Backend/uploads/
+Backend/uploads/*
+!Backend/uploads/.gitkeep
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Production Build Artifacts
+dist/
+dist-ssr/
+Frontend/dist/
+Frontend/dist-ssr/
+
+# IDE & OS Files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary and local migration scripts
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
