@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import PageSkeleton from '../../../components/PageSkeleton';
 import SellerLayout from '../components/layout/SellerLayout';
-import SellerMembershipGate from '../components/SellerMembershipGate';
 
 const Dashboard = lazy(() => import('../pages/Dashboard'));
 const SellerLogin = lazy(() => import('../pages/auth/SellerLogin'));
@@ -19,7 +18,6 @@ const Reports = lazy(() => import('../pages/Reports'));
 const Settings = lazy(() => import('../pages/Settings'));
 const Wallet = lazy(() => import('../pages/Wallet'));
 const Return = lazy(() => import('../pages/Return'));
-const SellerMembership = lazy(() => import('../pages/SellerMembership'));
 const SellerPolicyPage = lazy(() => import('../pages/SellerPolicyPage'));
 const SellerSupport = lazy(() => import('../pages/SellerSupport'));
 const SellerReferral = lazy(() => import('../pages/SellerReferral'));
@@ -39,7 +37,6 @@ const SellerRoutes = () => {
         
         {/* Protected Layout Routes — require active membership for selling panel */}
         <Route element={<ProtectedRoute role="seller" redirectPath="/seller/login" />}>
-          <Route element={<SellerMembershipGate />}>
           <Route element={<SellerLayout />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
@@ -79,13 +76,10 @@ const SellerRoutes = () => {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="*" element={<Navigate to="dashboard" replace />} />
           </Route>
-          </Route>
         </Route>
 
-        {/* Membership Route — protected (requires seller token) but full-screen (outside SellerLayout) */}
-        <Route element={<ProtectedRoute role="seller" redirectPath="/seller/login" />}>
-          <Route path="membership" element={<SellerMembership />} />
-        </Route>
+        {/* Subscription model is disabled for now */}
+        <Route path="membership" element={<Navigate to="/seller/dashboard" replace />} />
       </Routes>
     </Suspense>
   );

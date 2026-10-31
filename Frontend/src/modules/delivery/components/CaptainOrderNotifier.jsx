@@ -24,6 +24,8 @@ const CaptainOrderNotifier = () => {
     const captainToken = localStorage.getItem('sathiseller_captain_token');
     const isOnline = localStorage.getItem('sathiseller_captain_online') !== 'false';
     if (!captainToken || !isOnline) return;
+    // Don't poll in a background tab, or while the captain is busy on an active delivery screen
+    if (document.hidden || location.pathname.startsWith('/captain/active-delivery')) return;
 
     // If currently on dashboard, CaptainDashboard handles its own modal rendering
     if (isDashboard) {
@@ -66,11 +68,11 @@ const CaptainOrderNotifier = () => {
     } catch (err) {
       // Background poll silent catch
     }
-  }, [isDashboard, incomingJob]);
+  }, [isDashboard, incomingJob, location.pathname]);
 
   useEffect(() => {
     checkIncomingGigs();
-    const interval = setInterval(checkIncomingGigs, 4000);
+    const interval = setInterval(checkIncomingGigs, 8000);
     return () => clearInterval(interval);
   }, [checkIncomingGigs]);
 

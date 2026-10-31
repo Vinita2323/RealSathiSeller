@@ -8,9 +8,6 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { productService } from '../../../services/authService';
 import productReviewService from '../../../services/productReviewService';
-import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
-import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
-import sugarImg from '../../../assets/user/categories/Sugar-removebg-preview.png';
 import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
 import { cartLineId, normalizeAttributes } from '../../../utils/variantLabel';
 import { getDisplayStock, getEffectiveStock } from '../../../utils/productStock';
@@ -250,11 +247,42 @@ const ProductDetails = () => {
     }));
   };
 
-  const similarProducts = [
-    { id: 2, name: 'Refined Sunflower Oil', brand: 'Sathi Seller Select', price: 699, originalPrice: 1118, discount: 38, image: oilGheeImg, rating: 4.6 },
-    { id: 3, name: 'Premium Toor Dal 5kg', brand: 'Sathi Seller Select', price: 1499, originalPrice: 2398, discount: 38, image: masalaImg, rating: 4.8 },
-    { id: 4, name: 'Organic Fine Sugar', brand: 'Sathi Seller Select', price: 1299, originalPrice: 2078, discount: 38, image: sugarImg, rating: 4.7 },
-  ];
+  // Similar products = other products from the same category as the one being viewed
+  const [similarProducts, setSimilarProducts] = useState([]);
+  const currentProductId = product?._id || product?.id;
+  const currentCategory = product?.category;
+
+  React.useEffect(() => {
+    if (!currentCategory) {
+      setSimilarProducts([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const fetchSimilar = async () => {
+      try {
+        const res = await productService.getProducts({ category: currentCategory, limit: 12 });
+        if (cancelled || !res?.success) return;
+        const list = (res.products || [])
+          .filter((p) => String(p._id) !== String(currentProductId))
+          .slice(0, 10)
+          .map((p) => ({
+            ...p,
+            id: p._id,
+            brand: p.brand || (typeof p.seller === 'string' ? p.seller : '') || currentCategory,
+            price: Number(p.salePrice || p.mrp || 0),
+            originalPrice: Number(p.mrp || 0),
+            image: p.mainImage,
+          }));
+        setSimilarProducts(list);
+      } catch {
+        if (!cancelled) setSimilarProducts([]);
+      }
+    };
+    fetchSimilar();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCategory, currentProductId]);
 
   const handleWishlistClick = () => {
     const isAdded = toggleWishlist(product);
@@ -510,11 +538,11 @@ const ProductDetails = () => {
         </div>
 
         {/* Full Edge-to-Edge Image Container */}
-        <div className="w-full h-[320px] sm:h-[360px] md:h-[420px] lg:h-[480px] relative overflow-hidden bg-slate-100">
-          <img 
-            src={getImageUrl(activeImage || product.mainImage || product.image || (Array.isArray(product.galleryImages) && product.galleryImages[0]), product.name)} 
-            alt={product.name} 
-            className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
+        <div className="w-full h-[320px] sm:h-[360px] md:h-[420px] lg:h-[480px] relative overflow-hidden bg-white">
+          <img
+            src={getImageUrl(activeImage || product.mainImage || product.image || (Array.isArray(product.galleryImages) && product.galleryImages[0]), product.name)}
+            alt={product.name}
+            className="w-full h-full object-contain transition-transform duration-300"
             onError={(e) => handleImageError(e, product.name)}
           />
         </div>
@@ -539,7 +567,7 @@ const ProductDetails = () => {
                 <img 
                   src={getImageUrl(imgUrl, product.name)} 
                   alt={`Thumbnail ${idx+1}`} 
-                  className="w-full h-full object-cover" 
+                  className="w-full h-full object-contain"
                   onError={(e) => handleImageError(e, product.name)}
                 />
               </button>
@@ -793,22 +821,6 @@ const ProductDetails = () => {
           <div className="border-b border-slate-100 py-2.5">
             <div 
               className="flex justify-between items-center cursor-pointer"
-              onClick={() => toggleAccordion('delivery')}
-            >
-              <span className="text-[13px] font-medium text-slate-700">Delivery Information</span>
-              {activeAccordion === 'delivery' ? <ChevronDown size={15} className="text-slate-400" /> : <ChevronRight size={15} className="text-slate-400" />}
-            </div>
-            {activeAccordion === 'delivery' && (
-              <div className="pt-2 text-[12px] text-slate-600 space-y-1 font-normal">
-                <p className="m-0">⚡ Express delivery within 10-15 minutes.</p>
-                <p className="m-0">🚚 Standard free delivery for orders above ₹499.</p>
-              </div>
-            )}
-          </div>
-
-          <div className="border-b border-slate-100 py-2.5">
-            <div 
-              className="flex justify-between items-center cursor-pointer"
               onClick={() => toggleAccordion('policy')}
             >
               <span className="text-[13px] font-medium text-slate-700 flex items-center gap-1.5">
@@ -970,6 +982,7 @@ const ProductDetails = () => {
         </div>
 
         {/* Similar Items Carousel */}
+        {similarProducts.length > 0 && (
         <div className="pt-1 w-full min-w-0 overflow-hidden">
           <div className="flex justify-between items-center mb-2.5">
             <h3 className="text-[13px] font-semibold text-slate-800 m-0">Similar Products</h3>
@@ -1053,6 +1066,7 @@ const ProductDetails = () => {
             })}
           </div>
         </div>
+        )}
 
       </div>
       </div>

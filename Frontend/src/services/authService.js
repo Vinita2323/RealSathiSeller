@@ -816,7 +816,7 @@ export const captainService = {
     if (!forceRefresh && adminClientCache.captains.data && (now - adminClientCache.captains.timestamp < 30000)) {
       return adminClientCache.captains.data;
     }
-    const response = await API.get('/admin/captains');
+    const response = await API.get(forceRefresh ? '/admin/captains?fresh=1' : '/admin/captains');
     if (response.data && response.data.success) {
       adminClientCache.captains = { data: response.data, timestamp: now };
     }

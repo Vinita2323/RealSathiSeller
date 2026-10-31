@@ -214,13 +214,7 @@ const AddProduct = () => {
 
   const availableSections = [
     { id: 'flash_sale', name: 'Flash Sale', description: 'Limited-time deals with countdown timer', badge: 'Flash Sale' },
-    { id: 'best_deals', name: 'Best Deals', description: 'Special discounted deal cards on Homepage', badge: 'Best Deals' },
-    { id: 'featured', name: 'Featured Products', description: 'Top highlighted products on Homepage', badge: 'Featured' },
-    { id: 'bestseller', name: 'Bestseller', description: 'Showcase in Top Bestseller carousel cards', badge: 'Bestseller' },
-    { id: 'trending', name: 'Trending', description: 'Popular trending items section', badge: 'Trending' },
-    { id: 'new_arrivals', name: 'New Arrivals', description: 'Newly launched product additions', badge: 'New Arrival' },
-    { id: 'recommended', name: 'Recommended', description: 'Personalized recommendation widget', badge: 'Recommended' },
-    { id: 'category_featured', name: 'Category Deals', description: 'Highlight under daily category grid', badge: 'Category' }
+    { id: 'bestseller', name: 'Bestseller', description: 'Showcase in Top Bestseller carousel cards', badge: 'Bestseller' }
   ];
 
   const toggleHomeSection = (sectionId) => {

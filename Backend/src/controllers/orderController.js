@@ -50,7 +50,17 @@ export const invalidateSellerNotifCache = () => {
 const genDeliveryOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 // Helper: Find all eligible captains for a delivery
-export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState = '', deliveryPincode = '', sellerCity = '', sellerPincode = '') => {
+export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState = '', deliveryPincode = '', sellerCity = '', sellerPincode = '', excludeCaptainIds = []) => {
+  // Only approved captains may receive deliveries (not pending / under-review / suspended ones)
+  const baseFilter = {
+    $and: [
+      { $or: [{ status: 'approved' }, { accountStatus: 'approved' }] },
+      { status: { $nin: ['rejected', 'suspended'] } },
+      { accountStatus: { $nin: ['rejected', 'suspended'] } },
+    ],
+    ...(excludeCaptainIds.length ? { _id: { $nin: excludeCaptainIds } } : {}),
+  };
+
   const cleanCity = (deliveryCity || sellerCity || '').trim();
   const cleanPincode = (deliveryPincode || sellerPincode || '').trim();
   const cleanState = (deliveryState || '').trim();
@@ -58,7 +68,7 @@ export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState =
   // Tier 1: Match by Pincode / Local Area
   if (cleanPincode) {
     const pinCaptains = await Captain.find({
-      status: { $ne: 'rejected' },
+      ...baseFilter,
       isOnline: true,
       $or: [
         { pinCode: cleanPincode },
@@ -73,7 +83,7 @@ export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState =
   // Tier 2: Match by City / Working Area
   if (cleanCity) {
     const cityCaptains = await Captain.find({
-      status: { $ne: 'rejected' },
+      ...baseFilter,
       isOnline: true,
       $or: [
         { city: { $regex: cleanCity, $options: 'i' } },
@@ -88,7 +98,7 @@ export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState =
   // Tier 3: Match by State
   if (cleanState) {
     const stateCaptains = await Captain.find({
-      status: { $ne: 'rejected' },
+      ...baseFilter,
       isOnline: true,
       $or: [
         { state: { $regex: cleanState, $options: 'i' } },
@@ -99,11 +109,11 @@ export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState =
   }
 
   // Tier 4: All online captains
-  const allOnline = await Captain.find({ status: { $ne: 'rejected' }, isOnline: true }).sort({ updatedAt: -1 });
+  const allOnline = await Captain.find({ ...baseFilter, isOnline: true }).sort({ updatedAt: -1 });
   if (allOnline.length > 0) return allOnline;
 
-  // Fallback: All active captains
-  return Captain.find({ status: { $ne: 'rejected' } }).sort({ updatedAt: -1 }).limit(10);
+  // Fallback: approved captains who are currently offline (they see the job once they go online)
+  return Captain.find(baseFilter).sort({ updatedAt: -1 }).limit(10);
 };
 
 const notifyCaptainsOfPackedOrder = async (parentOrder, notification, captains, captainEarnings, deliveryCity) => {
@@ -202,7 +212,16 @@ export const autoAssignCaptainToOrder = async (notification) => {
         ? parentOrder.captainEarnings 
         : Math.max(15, Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100);
 
-      const eligibleCaptains = await findAllEligibleCaptains(deliveryCity, deliveryState, deliveryPincode, sellerCity, sellerPincode);
+      // On re-dispatch after a rejection, skip captains who were already offered this order
+      let alreadyOffered = [];
+      if (parentOrder.captainStatus === 'Rejected') {
+        alreadyOffered = await CaptainNotification.distinct('captainId', {
+          order: parentOrder._id,
+          type: 'JOB_ASSIGNED',
+        });
+      }
+
+      const eligibleCaptains = await findAllEligibleCaptains(deliveryCity, deliveryState, deliveryPincode, sellerCity, sellerPincode, alreadyOffered);
 
       if (eligibleCaptains && eligibleCaptains.length > 0) {
         const nearestCaptain = eligibleCaptains[0];
@@ -240,15 +259,16 @@ export const autoAssignCaptainToOrder = async (notification) => {
         notification.pickupOtp = pickupOtp;
         await notification.save();
 
+        // Only the assigned captain can see/accept this job, so only notify them
         await notifyCaptainsOfPackedOrder(
           claimed,
           notification,
-          eligibleCaptains,
+          [nearestCaptain],
           captainEarnings,
           deliveryCity
         );
 
-        console.log(`[CaptainAssign] Dispatched Order #${notification.orderId} to ${eligibleCaptains.length} captains (Primary: "${nearestCaptain.name}" - ${nearestCaptain.phone}). OTP: ${otp}, Payout: ₹${captainEarnings}`);
+        console.log(`[CaptainAssign] Dispatched Order #${notification.orderId} to captain "${nearestCaptain.name}" - ${nearestCaptain.phone} (${eligibleCaptains.length} eligible). OTP: ${otp}, Payout: ₹${captainEarnings}`);
         return nearestCaptain;
       } else {
         console.warn(`[CaptainAssign] No approved/active captain found for Order #${notification.orderId} in ${deliveryCity || 'any area'}.`);

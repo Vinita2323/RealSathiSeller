@@ -47,8 +47,12 @@ export const isPlatformOfficialSeller = (sellerRef) => {
  */
 export const MEMBERSHIP_ENFORCEMENT_CUTOFF = new Date('2026-10-09T00:00:00.000Z');
 
+/** Subscription model is switched off for now. Set to true to enforce seller memberships again. */
+export const SELLER_MEMBERSHIP_ENFORCED = false;
+
 /** True when seller-panel should treat subscription as required (UX / auth prompts). */
 export const isMembershipRequiredForSeller = (seller) => {
+  if (!SELLER_MEMBERSHIP_ENFORCED) return false;
   if (!seller) return true;
   if (seller.createdAt && new Date(seller.createdAt) < MEMBERSHIP_ENFORCEMENT_CUTOFF) {
     return false;
@@ -109,6 +113,8 @@ export const getActiveMembershipSellerIdSet = async (sellerIds = []) => {
     .filter(Boolean);
 
   if (ids.length === 0) return new Set();
+
+  if (!SELLER_MEMBERSHIP_ENFORCED) return new Set(ids.map((id) => String(id)));
 
   const now = new Date();
 
@@ -236,7 +242,7 @@ export const evaluateSellerStorefrontEligibility = async (sellerOrId, options = 
   }
 
   // Customer storefront / orders: active subscription required for every seller
-  const hasMembership = await sellerHasActiveMembership(seller._id);
+  const hasMembership = !SELLER_MEMBERSHIP_ENFORCED || (await sellerHasActiveMembership(seller._id));
   if (!hasMembership) {
     if (seller.membershipStatus === 'active') {
       await Seller.updateOne({ _id: seller._id }, { $set: { membershipStatus: 'expired' } });
@@ -250,7 +256,7 @@ export const evaluateSellerStorefrontEligibility = async (sellerOrId, options = 
     };
   }
 
-  if (seller.membershipStatus !== 'active') {
+  if (SELLER_MEMBERSHIP_ENFORCED && seller.membershipStatus !== 'active') {
     await Seller.updateOne({ _id: seller._id }, { $set: { membershipStatus: 'active' } });
   }
 

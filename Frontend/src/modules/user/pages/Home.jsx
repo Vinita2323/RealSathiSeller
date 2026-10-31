@@ -685,13 +685,13 @@ const Home = () => {
                   onClick={() => navigate(`/categories?category=${encodeURIComponent(cat.name)}`)}
                   className="flex flex-col items-center cursor-pointer group"
                 >
-                  <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] overflow-hidden p-1.5">
-                    <img 
-                      src={imgSrc} 
-                      alt={cat.name} 
+                  <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] overflow-hidden">
+                    <img
+                      src={imgSrc}
+                      alt={cat.name}
                       loading="lazy"
                       decoding="async"
-                      className="w-10 h-10 object-contain" 
+                      className="w-full h-full object-cover"
                       onError={(e) => handleImageError(e, cat.name)}
                     />
                   </div>

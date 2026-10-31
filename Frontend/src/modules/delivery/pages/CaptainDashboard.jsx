@@ -66,6 +66,7 @@ const CaptainDashboard = () => {
   const manualInputRef = useRef(null);
   const manualDebounceRef = useRef(null);
   const watchIdRef = useRef(null);
+  const lastLocationPostRef = useRef(0);
 
   // ── Body Scroll Lock when Modals are Open ─────────────────────
   useEffect(() => {
@@ -196,12 +197,13 @@ const CaptainDashboard = () => {
     return () => clearInterval(t);
   }, []);
 
-  // Polling every 5 seconds when online
+  // Poll every 10 seconds while online, but not while the tab is hidden
   useEffect(() => {
     if (!isOnline) return;
     const interval = setInterval(() => {
+      if (document.hidden) return;
       fetchDashboard(true);
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [isOnline, fetchDashboard]);
 
@@ -210,6 +212,10 @@ const CaptainDashboard = () => {
     if (isOnline && navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
         async (position) => {
+          // GPS fires every few seconds; only report location every 15s
+          const nowTs = Date.now();
+          if (nowTs - lastLocationPostRef.current < 15000) return;
+          lastLocationPostRef.current = nowTs;
           const { latitude, longitude } = position.coords;
           try {
             await captainService.updateLocation(latitude, longitude);

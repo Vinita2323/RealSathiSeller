@@ -2359,7 +2359,7 @@ export const CaptainManagement = () => {
   const fetchCaptains = React.useCallback(async (retryCount = 0) => {
     setLoading(true);
     try {
-      const res = await (captainService?.getAllCaptains ? captainService.getAllCaptains() : adminService.getCaptains());
+      const res = await (captainService?.getAllCaptains ? captainService.getAllCaptains(true) : adminService.getCaptains(true));
       if (res && (res.success || Array.isArray(res.captains) || Array.isArray(res))) {
         const rawList = res.captains || (Array.isArray(res) ? res : []);
         const mapped = rawList.map(c => {

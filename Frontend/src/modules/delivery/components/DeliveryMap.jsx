@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MapService } from '../../../services/MapService';
+
+const NO_STOPS = [];
 
 /**
  * DeliveryMap Component
@@ -17,7 +19,8 @@ const DeliveryMap = ({
   currentStep = 1,
   isReturn = false,
   isTransport = false,
-  stops = [],
+  stops = NO_STOPS,
+  routingEnabled = true, // set false once the trip is finished to stop Directions requests
   onMapLoad,
 }) => {
   const mapDivRef = useRef(null);
@@ -27,6 +30,7 @@ const DeliveryMap = ({
   const markersRef = useRef({});
   const infoWindowRef = useRef(null);
   const fallbackPolylineRef = useRef(null);
+  const lastRouteRef = useRef(null);
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(null);
@@ -47,9 +51,15 @@ const DeliveryMap = ({
     return null;
   };
 
-  const capCoords = extractCoords(captainLocation);
-  const pickCoords = extractCoords(pickupLocation);
-  const drpCoords = extractCoords(dropLocation);
+  // Memoize on primitive lat/lng so effects don't re-run (and re-request routes) on every render
+  const capRaw = extractCoords(captainLocation);
+  const pickRaw = extractCoords(pickupLocation);
+  const drpRaw = extractCoords(dropLocation);
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const capCoords = useMemo(() => capRaw, [capRaw?.lat, capRaw?.lng]);
+  const pickCoords = useMemo(() => pickRaw, [pickRaw?.lat, pickRaw?.lng]);
+  const drpCoords = useMemo(() => drpRaw, [drpRaw?.lat, drpRaw?.lng]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Determine current active navigation target based on activeTab or delivery step
   const getActiveTarget = useCallback(() => {
@@ -256,17 +266,13 @@ const DeliveryMap = ({
     if (!mapReady || !window.google || !mapInstanceRef.current || !directionsServiceRef.current || !directionsRendererRef.current) {
       return;
     }
+    // Trip finished / cancelled: no more route requests
+    if (!routingEnabled) return;
 
     const google = window.google;
     const map = mapInstanceRef.current;
     const directionsService = directionsServiceRef.current;
     const directionsRenderer = directionsRendererRef.current;
-
-    // Clean up fallback polyline
-    if (fallbackPolylineRef.current) {
-      fallbackPolylineRef.current.setMap(null);
-      fallbackPolylineRef.current = null;
-    }
 
     // Determine start and destination based on activeTarget
     let origin = null;
@@ -300,7 +306,29 @@ const DeliveryMap = ({
       waypoints = [...waypoints, ...extraStops];
     }
 
+    // Skip re-requesting the same route unless the captain really moved (>150 m) AND 30s passed.
+    // Directions API calls are billed, and GPS fires every few seconds.
+    const originPt = extractCoords(origin);
+    const routeKey = JSON.stringify([activeTarget, destination, waypoints]);
+    const prevRoute = lastRouteRef.current;
+    if (origin && destination && prevRoute && prevRoute.key === routeKey) {
+      const movedMeters = originPt && prevRoute.origin
+        ? Math.hypot(
+            (originPt.lat - prevRoute.origin.lat) * 111320,
+            (originPt.lng - prevRoute.origin.lng) * 111320 * Math.cos((originPt.lat * Math.PI) / 180)
+          )
+        : 0;
+      if (movedMeters < 150 || Date.now() - prevRoute.at < 30000) return;
+    }
+
+    // Clean up fallback polyline before redrawing
+    if (fallbackPolylineRef.current) {
+      fallbackPolylineRef.current.setMap(null);
+      fallbackPolylineRef.current = null;
+    }
+
     if (!origin || !destination) {
+      lastRouteRef.current = null;
       // Just fit bounds to available markers
       const bounds = new google.maps.LatLngBounds();
       let hasPoints = false;
@@ -317,6 +345,7 @@ const DeliveryMap = ({
       return;
     }
 
+    lastRouteRef.current = { key: routeKey, origin: originPt, at: Date.now() };
     setCalculatingRoute(true);
 
     const request = {
@@ -391,7 +420,7 @@ const DeliveryMap = ({
         }
       }
     });
-  }, [mapReady, capCoords, pickCoords, drpCoords, pickupAddress, dropAddress, activeTarget, stops]);
+  }, [mapReady, capCoords, pickCoords, drpCoords, pickupAddress, dropAddress, activeTarget, stops, routingEnabled]);
 
   // Handle external navigation in Google Maps App
   const handleOpenGoogleMaps = () => {
