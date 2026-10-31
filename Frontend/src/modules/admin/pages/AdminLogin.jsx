@@ -14,6 +14,17 @@ export const AdminLogin = () => {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isReadOnly, setIsReadOnly] = useState(true);
+
+  // Ensure fields start completely blank and prevent browser autofill
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    const timer = setTimeout(() => {
+      setIsReadOnly(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Validate any existing remembered/session cookie before showing the form.
   useEffect(() => {
@@ -98,15 +109,36 @@ export const AdminLogin = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2" autoComplete="on">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2" autoComplete="off">
+          {/* Hidden dummy fields to prevent aggressive browser autofill */}
+          <input
+            type="text"
+            name="fake_user_prevent_autofill"
+            autoComplete="off"
+            style={{ position: 'absolute', opacity: 0, height: 0, width: 0, pointerEvents: 'none', zIndex: -1 }}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <input
+            type="password"
+            name="fake_pass_prevent_autofill"
+            autoComplete="off"
+            style={{ position: 'absolute', opacity: 0, height: 0, width: 0, pointerEvents: 'none', zIndex: -1 }}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+
           <div>
             <label className="text-xs font-semibold text-slate-300 block mb-1.5">Admin Email</label>
             <div className="relative">
               <Mail size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-teal-300/60 pointer-events-none" />
               <input
                 type="email"
+                name="admin_login_email"
                 required
-                autoComplete="username"
+                autoComplete="off"
+                readOnly={isReadOnly}
+                onFocus={() => setIsReadOnly(false)}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter admin email"
@@ -121,8 +153,11 @@ export const AdminLogin = () => {
               <Lock size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-teal-300/60 pointer-events-none" />
               <input
                 type={showPassword ? 'text' : 'password'}
+                name="admin_login_password"
                 required
-                autoComplete="current-password"
+                autoComplete="new-password"
+                readOnly={isReadOnly}
+                onFocus={() => setIsReadOnly(false)}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"

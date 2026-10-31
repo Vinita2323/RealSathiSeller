@@ -17,6 +17,17 @@ export const SuperAdminLogin = () => {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState('');
+  const [isReadOnly, setIsReadOnly] = useState(true);
+
+  // Ensure fields start completely blank and prevent browser autofill
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    const timer = setTimeout(() => {
+      setIsReadOnly(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,7 +122,25 @@ export const SuperAdminLogin = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+            {/* Hidden dummy fields to prevent aggressive browser autofill */}
+            <input
+              type="text"
+              name="fake_user_prevent_autofill"
+              autoComplete="off"
+              style={{ position: 'absolute', opacity: 0, height: 0, width: 0, pointerEvents: 'none', zIndex: -1 }}
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <input
+              type="password"
+              name="fake_pass_prevent_autofill"
+              autoComplete="off"
+              style={{ position: 'absolute', opacity: 0, height: 0, width: 0, pointerEvents: 'none', zIndex: -1 }}
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Super Admin Email
@@ -120,8 +149,11 @@ export const SuperAdminLogin = () => {
                 <Mail size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
                   type="email"
+                  name="super_admin_email"
                   required
-                  autoComplete="username"
+                  autoComplete="off"
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter super admin email"
@@ -138,8 +170,11 @@ export const SuperAdminLogin = () => {
                 <Lock size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="super_admin_password"
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  readOnly={isReadOnly}
+                  onFocus={() => setIsReadOnly(false)}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"

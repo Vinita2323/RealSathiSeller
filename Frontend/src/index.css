@@ -146,3 +146,14 @@
     padding-right: 1.5rem;
   }
 }
+
+/* Prevent browser autofill from creating glaring light boxes on dark inputs */
+input.bg-\[\#002625\]:-webkit-autofill,
+input.bg-\[\#002625\]:-webkit-autofill:hover,
+input.bg-\[\#002625\]:-webkit-autofill:focus,
+input.bg-\[\#002625\]:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #002625 inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}

@@ -306,11 +306,29 @@ if (!hasFrontendEnv) {
 
   // D. Firebase Web Client
   const fbApiKey = frontendEnv.VITE_FIREBASE_API_KEY;
+  const fbVapidKey = frontendEnv.VITE_FIREBASE_VAPID_KEY;
+  const fbFrontProject = frontendEnv.VITE_FIREBASE_PROJECT_ID;
+
   if (isPlaceholder(fbApiKey) || !fbApiKey) {
     console.log(`  ${symbols.info} VITE_FIREBASE_API_KEY: Placeholder set (Web push messaging disabled until live credentials provided)`);
   } else {
     console.log(`  ${symbols.ok} VITE_FIREBASE_API_KEY: Configured (${maskSecret(fbApiKey)})`);
     passedCount++;
+  }
+
+  if (fbVapidKey && !isPlaceholder(fbVapidKey)) {
+    console.log(`  ${symbols.ok} VITE_FIREBASE_VAPID_KEY: Configured (${maskSecret(fbVapidKey)})`);
+    passedCount++;
+  }
+
+  if (fbFrontProject && backendEnv.FIREBASE_PROJECT_ID && !isPlaceholder(fbFrontProject) && !isPlaceholder(backendEnv.FIREBASE_PROJECT_ID)) {
+    if (fbFrontProject === backendEnv.FIREBASE_PROJECT_ID) {
+      console.log(`  ${symbols.ok} Firebase Project Sync: Frontend & Backend match ('${fbFrontProject}')`);
+      passedCount++;
+    } else {
+      console.log(`  ${symbols.warn} Firebase Project Mismatch: Frontend (${fbFrontProject}) vs Backend (${backendEnv.FIREBASE_PROJECT_ID})`);
+      warningsCount++;
+    }
   }
 
   // E. Secret Exposure Check

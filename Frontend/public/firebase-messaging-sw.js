@@ -2,15 +2,17 @@
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-// Firebase configuration (Live Project)
+// Dynamically parse Firebase configuration from registration URL query parameters (loaded from .env)
+const swUrlParams = new URLSearchParams(self.location.search);
+
 const firebaseConfig = {
-  apiKey: "AIzaSyCmU2Q2FhjKfmvqlZG24RWnBBR9DhtZ_DI",
-  authDomain: "shippnex-f25bc.firebaseapp.com",
-  projectId: "shippnex-f25bc",
-  storageBucket: "shippnex-f25bc.firebasestorage.app",
-  messagingSenderId: "476273943325",
-  appId: "1:476273943325:web:ecc2922d24278a0c3977f4",
-  measurementId: "G-K19Y3NFK2H"
+  apiKey: swUrlParams.get('apiKey') || "AIzaSyAFml5AgfwKdYsx4lNHKVbnWUrlrltM4B0",
+  authDomain: swUrlParams.get('authDomain') || "sathiseller-975a6.firebaseapp.com",
+  projectId: swUrlParams.get('projectId') || "sathiseller-975a6",
+  storageBucket: swUrlParams.get('storageBucket') || "sathiseller-975a6.firebasestorage.app",
+  messagingSenderId: swUrlParams.get('messagingSenderId') || "479252024510",
+  appId: swUrlParams.get('appId') || "1:479252024510:web:8f452e0c0bcd417eb122ef",
+  measurementId: swUrlParams.get('measurementId') || "G-MZCMPHECE7"
 };
 
 try {

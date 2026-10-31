@@ -2,7 +2,7 @@ import { messaging, getToken, onMessage } from '../firebase';
 import { isSupported } from 'firebase/messaging';
 import { getBaseApiUrl } from './api';
 
-const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BEpfQY8Farcg3X9t88x_yH0vOxuuXhaeLP6_EPcDS2gpSXVBEdstE-PyJnTHSiUCjWvIvlzNjhNJGOfgZ88pw_0';
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BA78Zfla9cR0tHFPjmhj529FtffE5z2IjBqQuBe46CIlMmuZJJIexM6O8dbBDiMG2WFM9Bxlx-wWBTNenwda8fc';
 const API_URL = getBaseApiUrl();
 
 /**
@@ -11,7 +11,19 @@ const API_URL = getBaseApiUrl();
 export async function registerServiceWorker() {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+      const swParams = new URLSearchParams();
+      if (import.meta.env.VITE_FIREBASE_API_KEY) swParams.set('apiKey', import.meta.env.VITE_FIREBASE_API_KEY);
+      if (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) swParams.set('authDomain', import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
+      if (import.meta.env.VITE_FIREBASE_PROJECT_ID) swParams.set('projectId', import.meta.env.VITE_FIREBASE_PROJECT_ID);
+      if (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) swParams.set('storageBucket', import.meta.env.VITE_FIREBASE_STORAGE_BUCKET);
+      if (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID) swParams.set('messagingSenderId', import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID);
+      if (import.meta.env.VITE_FIREBASE_APP_ID) swParams.set('appId', import.meta.env.VITE_FIREBASE_APP_ID);
+      if (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) swParams.set('measurementId', import.meta.env.VITE_FIREBASE_MEASUREMENT_ID);
+
+      const swQuery = swParams.toString();
+      const swUrl = swQuery ? `/firebase-messaging-sw.js?${swQuery}` : '/firebase-messaging-sw.js';
+
+      const registration = await navigator.serviceWorker.register(swUrl, {
         scope: '/',
       });
       console.log('✅ [FCM] Service Worker registered successfully:', registration.scope);
