@@ -572,26 +572,6 @@ const Settings = () => {
               Bank & Tax
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('membership')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-left border-none ${
-                activeTab === 'membership'
-                  ? 'bg-orange-50 text-[#ff7526] border border-orange-200/80 font-semibold'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Crown size={18} />
-                <span>Membership Plan</span>
-              </div>
-              {membership?.membershipStatus === 'active' && (
-                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
-                  Active
-                </span>
-              )}
-            </button>
-
           </div>
 
           {/* Account Status Card */}
@@ -600,11 +580,6 @@ const Settings = () => {
               <span className="text-[11px] uppercase tracking-wider font-medium text-white/80 bg-white/20 px-2 py-0.5 rounded-md">
                 ACCOUNT STATUS
               </span>
-              {membership && (
-                <span className="text-[10px] font-bold text-white bg-black/25 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Crown size={11} /> {membership.planName || 'Active Plan'}
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-3 pt-1">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg text-white shrink-0 overflow-hidden">

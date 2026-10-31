@@ -5,6 +5,7 @@ import CaptainMembership from '../models/CaptainMembership.model.js';
 import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
 import { applyReferralCodeAtRegistration } from './referralController.js';
+import { invalidateCaptainsCache } from './adminController.js';
 
 const processDocImage = async (imgStr, docName = 'doc') => {
   if (!imgStr) return '';
@@ -176,6 +177,7 @@ export const registerCaptain = async (req, res, next) => {
     } else {
       captain = await Captain.create(captainData);
     }
+    invalidateCaptainsCache();
 
     // Process referral code if provided
     if (referralCode) {
@@ -349,6 +351,7 @@ export const verifyOtp = async (req, res, next) => {
     }
 
     await captain.save();
+    invalidateCaptainsCache();
 
     // Critical: Do NOT return a token. Registration OTP verification moves account to UNDER_REVIEW.
     return res.status(200).json({

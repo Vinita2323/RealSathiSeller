@@ -80,9 +80,10 @@ const CaptainJobs = () => {
     fetchJobs(activeTab);
     fetchTabCounts();
     const interval = setInterval(() => {
+      if (document.hidden) return;
       fetchJobs(activeTab, true);
       fetchTabCounts();
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [activeTab, fetchJobs, fetchTabCounts]);
 

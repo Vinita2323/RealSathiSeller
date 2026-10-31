@@ -719,23 +719,33 @@ export const rejectJob = async (req, res, next) => {
     const { orderId } = req.params;
     const captainId = req.user.id;
 
-    const isMongoId = mongoose.Types.ObjectId.isValid(orderId);
-    const query = isMongoId ? { $or: [{ _id: orderId }, { orderId }] } : { orderId };
-
-    const order = await Order.findOne(query);
+    const order = await Order.findOne(buildOrderQuery(orderId));
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
+    if (String(order.captainId || '') !== String(captainId)) {
+      return res.status(403).json({ success: false, message: 'This order is not assigned to you' });
+    }
+    if (order.captainStatus !== 'Assigned') {
+      return res.status(400).json({ success: false, message: 'Only a newly assigned job can be rejected' });
+    }
 
     order.captainStatus = 'Rejected';
-    if (!order.captainId || String(order.captainId) === String(captainId)) {
-      order.captainId = null;
-    }
+    order.captainId = null;
     await order.save();
 
     console.log(`[Captain rejectJob] Captain ${captainId} rejected Order #${order.orderId}`);
     invalidateCaptainDashboardCache(captainId);
+
+    // Offer the order to the next eligible captain
+    try {
+      const { autoAssignCaptainToOrder } = await import('./orderController.js');
+      const sellerNotif = await SellerNotification.findOne({ order: order._id });
+      if (sellerNotif) await autoAssignCaptainToOrder(sellerNotif);
+    } catch (reassignErr) {
+      console.warn('[Captain rejectJob] Re-dispatch error:', reassignErr.message);
+    }
     res.json({ success: true, message: 'Job rejected', order });
   } catch (error) {
     console.error('[rejectJob ERROR]', error);

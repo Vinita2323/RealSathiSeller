@@ -88,16 +88,12 @@ export const getCategories = async (req, res, next) => {
       return res.status(200).json(categoriesCache.data);
     }
 
+    // No auto-seeding here: a category an admin deletes must stay deleted,
+    // even when the collection ends up empty.
     let categories = await Category.find()
       .select('name slug icon image parent status priority')
       .sort({ priority: 1 })
       .lean();
-
-    // Seed defaults only on a brand-new empty collection.
-    // A category an admin deletes must stay deleted.
-    if (categories.length === 0) {
-      categories = await Category.insertMany(initialCategories);
-    }
 
     // Normalize image paths for seamless rendering
     categories = categories.map(cat => {

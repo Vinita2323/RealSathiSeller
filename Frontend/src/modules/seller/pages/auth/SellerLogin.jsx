@@ -82,11 +82,7 @@ const SellerLogin = () => {
       if (res.success && res.token) {
         clearLoginDraft(SELLER_LOGIN_DRAFT_KEY);
         syncAuthFromStorage();
-        if (res.requiresMembership) {
-          navigate('/seller/membership');
-        } else {
-          navigate('/seller/dashboard');
-        }
+        navigate('/seller/dashboard');
       } else if (res.requiresPasswordSetup) {
         // Existing seller with no password set
         setForgotPhone(cleanPhone);

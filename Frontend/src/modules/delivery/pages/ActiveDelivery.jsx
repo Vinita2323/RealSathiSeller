@@ -1019,6 +1019,11 @@ const ActiveDelivery = () => {
             isReturn={isReturn}
             isTransport={isTransport}
             stops={transportStops}
+            routingEnabled={
+              !['Delivered', 'Cancelled'].includes(activeItem?.captainStatus)
+              && !['Delivered', 'Cancelled'].includes(activeItem?.orderStatus)
+              && !['RIDE_COMPLETED', 'CANCELLED'].includes(activeItem?.status)
+            }
           />
         </div>
 

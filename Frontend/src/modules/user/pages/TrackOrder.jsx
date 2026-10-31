@@ -87,15 +87,21 @@ const TrackOrder = () => {
     if (!targetId) return;
 
     let isMounted = true;
+    let interval = null;
+    // Once the order reaches one of these, nothing more will change — stop polling.
+    const FINAL_STATUSES = [
+      'Delivered', 'Cancelled', 'Rejected', 'Failed',
+      'Return Requested', 'Return Approved', 'Return Rejected', 'Returned',
+      'Refund Completed', 'Refunded',
+    ];
     const fetchLive = async () => {
       try {
         const res = await orderService.getOrderById(targetId);
         if (isMounted && res.success && res.order) {
           setLiveOrder(res.order);
-          const oStat = res.order.orderStatus;
-          if (oStat === 'Delivered' || res.order.captainStatus === 'Delivered' || ['Return Requested', 'Return Approved', 'Returned'].includes(oStat)) {
-            fetchOrderReviews(res.order.orderId || res.order._id);
-            fetchOrderReturns(res.order.orderId || res.order._id);
+          // Reviews / returns for a delivered order are loaded by the effect below
+          if (FINAL_STATUSES.includes(res.order.orderStatus) || res.order.captainStatus === 'Delivered') {
+            clearInterval(interval);
           }
         }
       } catch (err) {
@@ -106,8 +112,12 @@ const TrackOrder = () => {
     };
 
     fetchLive();
-    fetchOrderReturns(targetId);
-    const interval = setInterval(fetchLive, 4000);
+    const startStatus = initialOrder?.orderStatus;
+    if (!FINAL_STATUSES.includes(startStatus) && initialOrder?.captainStatus !== 'Delivered') {
+      interval = setInterval(() => {
+        if (!document.hidden) fetchLive();
+      }, 8000);
+    }
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -150,18 +160,19 @@ const TrackOrder = () => {
   const isDelivered = orderStatus === 'Delivered' || captainStatus === 'Delivered' || order?.status === 'Delivered' || ['Return Requested', 'Return Approved', 'Returned', 'Return Rejected', 'Refund Completed', 'Refunded'].includes(orderStatus) || isRefundCompleted;
   const hasReturnRecord = isRefundCompleted || isReturnRequested || isReturnApproved || isReturnRejected || isReturned || orderReturns.length > 0;
 
+  // Load returns once per order (and again when its status changes), reviews only after delivery
+  const trackedOrderId = order?.orderId || order?._id || order?.id;
   useEffect(() => {
-    const targetOrderId = order?.orderId || order?._id || order?.id;
-    if (targetOrderId && isDelivered) {
-      fetchOrderReviews(targetOrderId);
-      fetchOrderReturns(targetOrderId);
-    }
-  }, [order?.orderStatus, order?.captainStatus, order?.status, isDelivered]);
+    if (!trackedOrderId) return;
+    fetchOrderReturns(trackedOrderId);
+    if (isDelivered) fetchOrderReviews(trackedOrderId);
+  }, [trackedOrderId, order?.orderStatus, order?.captainStatus, isDelivered]);
 
   // Delivery (captain) rating status after grocery order is delivered
+  const captainIdKey = String(order?.captainId?._id || order?.captainId || '');
   useEffect(() => {
     const rideId = order?.orderId || order?._id;
-    const hasCaptain = Boolean(order?.captainId);
+    const hasCaptain = Boolean(captainIdKey);
     if (!isDelivered || !rideId || !hasCaptain) return;
     let cancelled = false;
     (async () => {
@@ -180,7 +191,7 @@ const TrackOrder = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [isDelivered, order?.orderId, order?._id, order?.captainId]);
+  }, [isDelivered, order?.orderId, order?._id, captainIdKey]);
 
   const handleOpenRateModal = (item, existingRev = null) => {
     const prodObj = {
