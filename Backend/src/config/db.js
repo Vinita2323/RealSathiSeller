@@ -18,9 +18,12 @@ const connectDB = async () => {
       maxPoolSize: 50,
       minPoolSize: 5,
       maxIdleTimeMS: 30000,
-      serverSelectionTimeoutMS: 8000,
+      // Generous timeouts so short network drops to Atlas are ridden out instead of failing requests
+      serverSelectionTimeoutMS: 30000,
+      heartbeatFrequencyMS: 5000, // notice recovery quickly after a drop
+      bufferTimeoutMS: 20000, // how long a query waits for the connection before failing
       socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000,
+      connectTimeoutMS: 30000,
       family: 4,
       retryWrites: true,
       w: 'majority',

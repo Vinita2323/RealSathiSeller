@@ -30,6 +30,9 @@ const Wallet = lazy(() => import('../pages/Wallet'));
 const Terms = lazy(() => import('../pages/Terms'));
 const Faqs = lazy(() => import('../pages/Faqs'));
 const HelpSupport = lazy(() => import('../pages/HelpSupport'));
+const RepairHome = lazy(() => import('../pages/repair/RepairHome'));
+const RepairBook = lazy(() => import('../pages/repair/RepairBook'));
+const RepairTrack = lazy(() => import('../pages/repair/RepairTrack'));
 
 const UserRoutes = () => {
   const location = useLocation();
@@ -49,7 +52,9 @@ const UserRoutes = () => {
   const isLocation = location.pathname === '/location';
   const isPlaceholder = ['/account-information', '/saved-addresses', '/wallet', '/terms', '/privacy', '/faqs', '/support'].includes(location.pathname);
   
-  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isOrderHistory || isProfile || isLogin || isVerifyOtp || isProductDetails || isSellerStore || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder;
+  const isRepairFlow = location.pathname.startsWith('/repair/');
+
+  const hideBottomNav = isRepairFlow || isCart || isCheckout || isPayment || isTrackOrder || isOrderHistory || isProfile || isLogin || isVerifyOtp || isProductDetails || isSellerStore || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder;
 
   return (
     <>
@@ -86,6 +91,10 @@ const UserRoutes = () => {
             <Route path="/account-information" element={<AccountInfo />} />
             <Route path="/saved-addresses" element={<SavedAddresses />} />
             <Route path="/wallet" element={<Wallet />} />
+            {/* Repair & Services (separate module) */}
+            <Route path="/repair" element={<RepairHome />} />
+            <Route path="/repair/book" element={<RepairBook />} />
+            <Route path="/repair/booking/:id" element={<RepairTrack />} />
           </Route>
         </Routes>
       </Suspense>

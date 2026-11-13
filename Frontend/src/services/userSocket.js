@@ -4,8 +4,8 @@ import { getBaseApiUrl } from './api';
 let socket = null;
 
 const getSocketOrigin = () => {
-  const apiBase = getBaseApiUrl(); // e.g. http://localhost:5000/api
-  return apiBase.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+  const apiBase = getBaseApiUrl(); // e.g. http://localhost:7000/api
+  return apiBase.replace(/\/api\/?$/, '') || 'http://localhost:7000';
 };
 
 export const connectUserSocket = (token) => {

@@ -52,6 +52,7 @@ import {
   Car
 } from 'lucide-react';
 import { authService } from '../../../services/authService';
+import { Wrench as RepairWrenchIcon } from 'lucide-react';
 
 export const AdminSidebar = () => {
   const navigate = useNavigate();
@@ -163,6 +164,22 @@ export const AdminSidebar = () => {
           submenu: [
             { id: 'manage_sellers', label: 'Manage Seller List' },
             { id: 'seller_registration_fee', label: 'Seller Registration Fee' }
+          ]
+        },
+      ]
+    },
+    {
+      title: 'REPAIR & SERVICES',
+      items: [
+        {
+          id: 'repair_services',
+          label: 'Repair & Services',
+          icon: RepairWrenchIcon,
+          submenu: [
+            { id: 'repair_bookings', label: 'Repair Bookings' },
+            { id: 'repair_pricing', label: 'Repair Categories' },
+            { id: 'repair_content', label: 'Page Content' },
+            { id: 'repair_drivers', label: 'Add Driver' },
           ]
         },
       ]

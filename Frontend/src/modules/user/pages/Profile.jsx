@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { authService, orderService, getCachedUserOrders } from '../../../services/authService';
 import RatingBreakdownModal from '../../../components/RatingBreakdownModal';
+import { Wrench as RepairWrenchIcon } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
@@ -464,6 +465,23 @@ const Profile = () => {
                 <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
               </div>
 
+              {/* Repair & Services */}
+              <div
+                className="flex items-center justify-between cursor-pointer group"
+                onClick={() => navigate('/repair')}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-[36px] h-[36px] rounded-[12px] bg-[#ffedd5] flex items-center justify-center shrink-0">
+                    <RepairWrenchIcon size={16} className="text-[#ea580c]" />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-bold text-[#1e1b4b]">Repair & Services</span>
+                    <span className="text-[11px] font-medium text-slate-400">Book repairs & track your repairs</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+              </div>
+
               {/* Account Info */}
               <div 
                 className="flex items-center justify-between cursor-pointer group"
@@ -658,6 +676,23 @@ const Profile = () => {
                     <div>
                       <h4 className="text-sm font-bold text-[#1e1b4b] m-0 group-hover:text-[#ec4899] transition-colors">My Wishlist</h4>
                       <p className="text-[11px] text-slate-400 m-0 font-medium">View saved items</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+
+                {/* Repair & Services Link */}
+                <div
+                  onClick={() => navigate('/repair')}
+                  className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#ea580c] flex items-center justify-center shrink-0 group-hover:bg-orange-100 transition-colors">
+                      <RepairWrenchIcon size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[#1e1b4b] m-0 group-hover:text-[#ea580c] transition-colors">Repair & Services</h4>
+                      <p className="text-[11px] text-slate-400 m-0 font-medium">Book & track repairs</p>
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />

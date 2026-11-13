@@ -9,6 +9,7 @@ const DeliveryRoutes = lazy(() => import('./modules/delivery/routes/DeliveryRout
 const SellerRoutes = lazy(() => import('./modules/seller/routes/SellerRoutes'));
 const AdminRoutes = lazy(() => import('./modules/admin/routes/AdminRoutes'));
 const SuperAdminRoutes = lazy(() => import('./modules/super-admin/routes/SuperAdminRoutes'));
+const TechnicianRoutes = lazy(() => import('./modules/repair-technician/routes/TechnicianRoutes'));
 
 import { CartProvider } from './modules/user/context/CartContext';
 import { WishlistProvider } from './modules/user/context/WishlistContext';
@@ -72,6 +73,7 @@ function App() {
                         <Route path="/seller/*" element={<SellerRoutes />} />
                         <Route path="/admin/*" element={<AdminRoutes />} />
                         <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
+                        <Route path="/technician/*" element={<TechnicianRoutes />} />
                         <Route path="/*" element={<UserRoutes />} />
                       </Routes>
                     </Suspense>

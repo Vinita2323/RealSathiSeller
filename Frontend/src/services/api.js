@@ -20,15 +20,15 @@ export const getBaseApiUrl = () => {
       /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
 
     if (isLocalOrLAN) {
-      return `${protocol}//${hostname}:5000/api`;
+      return `${protocol}//${hostname}:7000/api`;
     }
 
     // Production is served over HTTPS. Use the same origin so the page never
-    // calls http://localhost:5000 or a raw IP.
+    // calls http://localhost:7000 or a raw IP.
     return `${protocol}//${hostname}/api`;
   }
 
-  return 'http://localhost:5000/api';
+  return 'http://localhost:7000/api';
 };
 
 const API = axios.create({

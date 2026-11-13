@@ -28,6 +28,7 @@ import {
 } from '../utils/selectedVariants.js';
 import { evaluateProductSellerEligibility } from '../utils/sellerEligibility.js';
 import { debitUserWallet } from '../utils/userWalletHelper.js';
+import RepairDriver from '../models/RepairDriver.model.js';
 
 // Helper: Clean base64 image strings or invalid dummy links
 const cleanImage = (img) => {
@@ -51,6 +52,10 @@ const genDeliveryOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 // Helper: Find all eligible captains for a delivery
 export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState = '', deliveryPincode = '', sellerCity = '', sellerPincode = '', excludeCaptainIds = []) => {
+  // Drivers added under Repair & Services as "repair only" never receive grocery orders
+  const repairOnlyIds = await RepairDriver.distinct('captain', { repairOnly: true });
+  const excludedIds = [...excludeCaptainIds, ...repairOnlyIds];
+
   // Only approved captains may receive deliveries (not pending / under-review / suspended ones)
   const baseFilter = {
     $and: [
@@ -58,7 +63,7 @@ export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState =
       { status: { $nin: ['rejected', 'suspended'] } },
       { accountStatus: { $nin: ['rejected', 'suspended'] } },
     ],
-    ...(excludeCaptainIds.length ? { _id: { $nin: excludeCaptainIds } } : {}),
+    ...(excludedIds.length ? { _id: { $nin: excludedIds } } : {}),
   };
 
   const cleanCity = (deliveryCity || sellerCity || '').trim();

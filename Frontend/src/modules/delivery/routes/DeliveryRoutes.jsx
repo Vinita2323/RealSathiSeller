@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import PageSkeleton from '../../../components/PageSkeleton';
 import CaptainOrderNotifier from '../components/CaptainOrderNotifier';
+import RepairJobNotifier from '../components/RepairJobNotifier';
 
 const CaptainLogin = lazy(() => import('../pages/CaptainLogin'));
 const CaptainRegister = lazy(() => import('../pages/CaptainRegister'));
@@ -24,11 +25,13 @@ const CaptainSupport = lazy(() => import('../pages/CaptainSupport'));
 const CaptainDeleteAccount = lazy(() => import('../pages/CaptainDeleteAccount'));
 const CaptainReferral = lazy(() => import('../pages/CaptainReferral'));
 const CaptainCashCollection = lazy(() => import('../pages/CaptainCashCollection'));
+const CaptainRepairJobs = lazy(() => import('../pages/CaptainRepairJobs'));
 
 const DeliveryRoutes = () => {
   return (
     <>
       <CaptainOrderNotifier />
+      <RepairJobNotifier />
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<Navigate to="/captain/dashboard" replace />} />
@@ -43,6 +46,7 @@ const DeliveryRoutes = () => {
           <Route element={<ProtectedRoute role="captain" redirectPath="/captain/login" />}>
             <Route path="/dashboard" element={<CaptainDashboard />} />
             <Route path="/jobs" element={<CaptainJobs />} />
+            <Route path="/repair-jobs" element={<CaptainRepairJobs />} />
             <Route path="/new-job" element={<NewJobRequest />} />
             <Route path="/active-delivery" element={<ActiveDelivery />} />
             <Route path="/navigation-active" element={<LogisticsNavigation />} />

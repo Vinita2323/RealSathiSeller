@@ -143,7 +143,7 @@ if (!hasBackendEnv) {
   console.log(`  ${symbols.fail} Backend .env does not exist. Skipping detailed checks.`);
 } else {
   // A. Port & Environment
-  const port = backendEnv.PORT || '5000';
+  const port = backendEnv.PORT || '7000';
   if (!isNaN(Number(port)) && Number(port) > 0) {
     console.log(`  ${symbols.ok} PORT: Configured as ${port}`);
     passedCount++;
@@ -267,7 +267,7 @@ if (!hasFrontendEnv) {
   // A. Base API URL
   const apiUrl = frontendEnv.VITE_API_URL;
   if (!apiUrl || apiUrl.trim() === '') {
-    console.log(`  ${symbols.warn} VITE_API_URL: Not set (Frontend will dynamically fallback to current host:5000)`);
+    console.log(`  ${symbols.warn} VITE_API_URL: Not set (Frontend will dynamically fallback to current host:7000)`);
     warningsCount++;
   } else {
     try {

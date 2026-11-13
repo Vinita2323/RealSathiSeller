@@ -45,6 +45,7 @@ import commissionRoutes from './routes/commissionRoutes.js';
 import referralRoutes from './routes/referralRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
 import pricingRoutes from './routes/pricingRoutes.js';
+import repairRoutes from './routes/repairRoutes.js';
 import razorpayWebhookRoutes from './routes/razorpayWebhookRoutes.js';
 import compression from 'compression';
 import performanceLogger from './middleware/performanceMiddleware.js';
@@ -161,6 +162,7 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/captain-registration-fee`, captainRegistrationFeeRoutes);
   app.use(`${prefix}/referral`, referralRoutes);
   app.use(`${prefix}/pricing`, pricingRoutes);
+  app.use(`${prefix}/repair`, repairRoutes);
   app.use(`${prefix}`, commissionRoutes);
 };
 
@@ -178,7 +180,7 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 7000;
 
 const httpServer = http.createServer(app);
 initSocket(httpServer);

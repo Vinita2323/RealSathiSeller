@@ -3,6 +3,7 @@ import { useAdmin } from '../context/useAdmin';
 import { AdminSidebar } from '../components/AdminSidebar';
 import { AdminHeader } from '../components/AdminHeader';
 import PageSkeleton from '../../../components/PageSkeleton';
+import RepairRequestNotifier from '../components/RepairRequestNotifier';
 
 // Lazy-loaded Admin Subpages and Features
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
@@ -62,6 +63,15 @@ const AdminCaptainPayout = lazy(() => import('../pages/AdminPayoutManagement').t
 const AdminRefundReturn = lazy(() => import('../pages/AdminPayoutManagement').then(m => ({ default: m.AdminRefundReturn })));
 const AdminFinancialDashboard = lazy(() => import('../pages/AdminFinancialDashboard').then(m => ({ default: m.AdminFinancialDashboard })));
 const AdminCashSettlements = lazy(() => import('../pages/AdminCashSettlements').then(m => ({ default: m.AdminCashSettlements || m.default })));
+
+// Repair & Services module
+const RepairBookingsAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairBookingsAdmin })));
+const RepairTechniciansAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairTechniciansAdmin })));
+const RepairCentersAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairCentersAdmin })));
+const RepairPricingAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairPricingAdmin })));
+const RepairDriversAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairDriversAdmin })));
+const RepairPageContentAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairPageContentAdmin })));
+const RepairReportsAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairReportsAdmin })));
 
 export const AdminLayout = () => {
   const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isCompact } = useAdmin();
@@ -237,6 +247,24 @@ export const AdminLayout = () => {
       case 'payout-refund-return':
       case 'payout_refund':
         return <AdminRefundReturn />;
+      case 'repair_bookings':
+        return <RepairBookingsAdmin preset="all" />;
+      case 'repair_riders':
+        return <RepairBookingsAdmin preset="riders" />;
+      case 'repair_quotations':
+        return <RepairBookingsAdmin preset="quotations" />;
+      case 'repair_technicians':
+        return <RepairTechniciansAdmin />;
+      case 'repair_centers':
+        return <RepairCentersAdmin />;
+      case 'repair_pricing':
+        return <RepairPricingAdmin />;
+      case 'repair_drivers':
+        return <RepairDriversAdmin />;
+      case 'repair_content':
+        return <RepairPageContentAdmin />;
+      case 'repair_reports':
+        return <RepairReportsAdmin />;
       default:
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
     }
@@ -253,6 +281,7 @@ export const AdminLayout = () => {
         />
       )}
       <AdminSidebar />
+      <RepairRequestNotifier />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
         <AdminHeader />

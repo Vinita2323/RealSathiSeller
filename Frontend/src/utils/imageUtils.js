@@ -164,7 +164,7 @@ export const getImageUrl = (url, nameOrFallback = '') => {
   if (trimmed.includes('Grocery-removebg-preview')) return groceryImg;
 
   // Determine current backend base URL. Public HTTPS pages use the site origin,
-  // not http://hostname:5000, so uploaded images are not mixed content.
+  // not http://hostname:7000, so uploaded images are not mixed content.
   const apiBase = import.meta.env.VITE_API_URL || '';
   const page = typeof window !== 'undefined' ? window.location : null;
   const localHost = page && (
@@ -175,8 +175,8 @@ export const getImageUrl = (url, nameOrFallback = '') => {
     /^172\.(1[6-9]|2\d|3[0-1])\./.test(page.hostname)
   );
   const defaultBackendHost = page
-    ? (localHost ? `${page.protocol}//${page.hostname}:5000` : `${page.protocol}//${page.hostname}`)
-    : 'http://localhost:5000';
+    ? (localHost ? `${page.protocol}//${page.hostname}:7000` : `${page.protocol}//${page.hostname}`)
+    : 'http://localhost:7000';
   const hostBase = apiBase ? apiBase.replace(/\/api\/?$/, '') : defaultBackendHost;
 
   // Local uploads path: e.g. /uploads/... or uploads/... or /api/uploads/...
@@ -185,8 +185,8 @@ export const getImageUrl = (url, nameOrFallback = '') => {
     return `${hostBase}${cleanPath}`;
   }
 
-  // Rewrite localhost / 127.0.0.1 or stale IP:5000 URLs to current backend host
-  const localhostMatch = trimmed.match(/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):5000(\/.*)$/);
+  // Rewrite localhost / 127.0.0.1 or stale IP:5000/7000 URLs to current backend host
+  const localhostMatch = trimmed.match(/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):(?:5000|7000)(\/.*)$/);
   if (localhostMatch) {
     return `${hostBase}${localhostMatch[2]}`;
   }
@@ -204,7 +204,7 @@ export const getImageUrl = (url, nameOrFallback = '') => {
       try {
         const parsed = new URL(trimmed);
         const ownUpload = parsed.pathname.startsWith('/uploads/')
-          && (parsed.hostname === page.hostname || parsed.port === '5000' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+          && (parsed.hostname === page.hostname || ['5000', '7000'].includes(parsed.port) || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
         if (ownUpload) return `${page.origin}${parsed.pathname}${parsed.search}`;
       } catch (err) {}
     }

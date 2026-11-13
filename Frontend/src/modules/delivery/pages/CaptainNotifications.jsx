@@ -50,7 +50,8 @@ const CaptainNotifications = () => {
 
     // Navigate on job assignment notifications
     if (notification.type === 'JOB_ASSIGNED') {
-      navigate('/captain/active-delivery');
+      // Repair & Services jobs use booking IDs starting with "REP-"
+      navigate(String(notification.orderId || '').startsWith('REP-') ? '/captain/repair-jobs' : '/captain/active-delivery');
     }
   };
 

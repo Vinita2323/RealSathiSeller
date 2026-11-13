@@ -912,6 +912,21 @@ const CaptainDashboard = () => {
               </section>
             )}
 
+            {/* Repair & Services pickups / deliveries */}
+            <section
+              onClick={() => navigate('/captain/repair-jobs')}
+              className="bg-white rounded-2xl p-3.5 flex items-center gap-3.5 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] cursor-pointer hover:border-emerald-200 hover:shadow-md transition-all active:scale-[0.99]"
+            >
+              <div className="w-10 h-10 shrink-0 rounded-xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                <span className="material-symbols-outlined text-xl font-bold">build</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-xs text-slate-800 leading-tight">Repair Pickups &amp; Deliveries</p>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">Pick up devices for repair and deliver them back</p>
+              </div>
+              <span className="material-symbols-outlined text-slate-400 text-lg shrink-0">chevron_right</span>
+            </section>
+
             {/* Active Service Areas Utility Card */}
             <section
               onClick={() => navigate('/captain/service-areas')}

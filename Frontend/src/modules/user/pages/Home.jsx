@@ -6,6 +6,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useLocationContext } from '../../../context/LocationContext';
 import { applySavedAddressesAsDeliveryLocation, isDeliverableLocation, clearStoredUserLocation } from '../../../utils/userLocation';
 import { addressService, bannerService, categoryService, productService, sellerService } from '../../../services/authService';
+import { Wrench as RepairWrenchIcon } from 'lucide-react';
 import { 
   Bell, 
   ShoppingCart, 
@@ -722,6 +723,24 @@ const Home = () => {
             </>
           )}
         </div>
+
+        {/* Repair & Services entry */}
+        <button
+          type="button"
+          onClick={() => navigate('/repair')}
+          className="w-full mb-8 md:mb-10 flex items-center justify-between gap-3 bg-gradient-to-r from-[#ff5500] to-[#ff8a3d] text-white rounded-2xl p-4 border-none cursor-pointer text-left shadow-sm"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <RepairWrenchIcon size={22} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[15px] md:text-lg font-extrabold leading-tight">Repair &amp; Services</div>
+              <div className="text-[11px] md:text-sm font-medium opacity-95">Phones, laptops, TVs &amp; appliances — free doorstep pickup</div>
+            </div>
+          </div>
+          <span className="shrink-0 bg-white text-[#ff5500] text-[11px] font-extrabold px-3 py-1.5 rounded-full">Book Now</span>
+        </button>
 
         {/* Flash Deals */}
         <div className="flex justify-between items-center mb-4">

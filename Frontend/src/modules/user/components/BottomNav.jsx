@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home as HomeIcon, LayoutGrid, ShoppingCart, ClipboardList, User } from 'lucide-react';
+import { Home as HomeIcon, LayoutGrid, ShoppingCart, ClipboardList, User, Wrench } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 const BottomNav = () => {
@@ -53,7 +53,14 @@ const BottomNav = () => {
         <ClipboardList size={24} />
         <span className="text-[10px] font-semibold">Orders</span>
       </div>
-      <div 
+      <div
+        className={`flex flex-col items-center gap-1 cursor-pointer relative transition-colors duration-200 ${currentPath.startsWith('/repair') ? 'text-[#ff5500]' : 'text-slate-400'}`}
+        onClick={() => navigate('/repair')}
+      >
+        <Wrench size={24} />
+        <span className="text-[10px] font-semibold">Repair</span>
+      </div>
+      <div
         className={`flex flex-col items-center gap-1 cursor-pointer relative transition-colors duration-200 ${currentPath === '/profile' ? 'text-[#ff5500]' : 'text-slate-400'}`}
         onClick={() => navigate('/profile')}
       >
