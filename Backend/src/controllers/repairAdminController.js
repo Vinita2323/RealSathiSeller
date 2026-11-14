@@ -9,9 +9,11 @@ import Captain from '../models/Captain.model.js';
 import RepairDriver from '../models/RepairDriver.model.js';
 import {
   ADMIN_CANCELLABLE,
+  REPAIR_STATUS_LABELS,
   pushHistory,
   notifyCaptain,
   notifyCustomer,
+  notifyAssignedCaptainsCancelled,
 } from '../utils/repairHelpers.js';
 
 const isId = (v) => mongoose.Types.ObjectId.isValid(String(v || ''));
@@ -76,15 +78,23 @@ export const getBooking = async (req, res, next) => {
 // Lightweight feed polled by the admin panel to alert on new repair requests (status REQUESTED).
 export const getNewRequests = async (req, res, next) => {
   try {
-    const [requests, count] = await Promise.all([
+    const [requests, count, arrivals] = await Promise.all([
       RepairBooking.find({ status: 'REQUESTED' })
-        .select('bookingId categoryName brand model problem pickupAddress.fullName pickupAddress.phone pickupAddress.city pickupSlot createdAt')
+        .select('bookingId categoryName brand model problem subProblem pickupAddress.fullName pickupAddress.phone pickupAddress.city pickupSlot createdAt')
         .sort({ createdAt: -1 })
         .limit(15)
         .lean(),
       RepairBooking.countDocuments({ status: 'REQUESTED' }),
+      // Riders who reached the repair center and are waiting for the handover OTP
+      RepairBooking.find({ status: 'REACHED_CENTER' })
+        .select('bookingId categoryName brand model problem subProblem centerOtp reachedCenterAt pickupCaptainId repairCenter')
+        .populate('pickupCaptainId', 'name phone')
+        .populate('repairCenter', 'name')
+        .sort({ reachedCenterAt: -1 })
+        .limit(15)
+        .lean(),
     ]);
-    res.json({ success: true, count, requests });
+    res.json({ success: true, count, requests, arrivals });
   } catch (error) {
     next(error);
   }
@@ -93,24 +103,21 @@ export const getNewRequests = async (req, res, next) => {
 // GET /api/repair/admin/riders  – approved captains that can be given repair pickups / deliveries
 export const listRiders = async (req, res, next) => {
   try {
-    const [captains, links] = await Promise.all([
-      Captain.find({
-        $and: [
-          { $or: [{ status: 'approved' }, { accountStatus: 'approved' }] },
-          { status: { $nin: ['rejected', 'suspended'] } },
-          { accountStatus: { $nin: ['rejected', 'suspended'] } },
-        ],
-      })
-        .select('name phone city isOnline vehicleType')
-        .sort({ isOnline: -1, name: 1 })
-        .lean(),
-      RepairDriver.find().select('captain').lean(),
-    ]);
-    const driverIds = new Set(links.map((l) => String(l.captain)));
-    // Dedicated repair drivers first, then other approved captains
-    const riders = captains
-      .map((c) => ({ ...c, isRepairDriver: driverIds.has(String(c._id)) }))
-      .sort((a, b) => Number(b.isRepairDriver) - Number(a.isRepairDriver));
+    // Only drivers added by the admin under Repair & Services can be given repair pickups / deliveries
+    const links = await RepairDriver.find().select('captain').lean();
+    const driverIds = links.map((l) => l.captain);
+    const captains = driverIds.length === 0 ? [] : await Captain.find({
+      $and: [
+        { _id: { $in: driverIds } },
+        { $or: [{ status: 'approved' }, { accountStatus: 'approved' }] },
+        { status: { $nin: ['rejected', 'suspended'] } },
+        { accountStatus: { $nin: ['rejected', 'suspended'] } },
+      ],
+    })
+      .select('name phone city isOnline vehicleType')
+      .sort({ isOnline: -1, name: 1 })
+      .lean();
+    const riders = captains.map((c) => ({ ...c, isRepairDriver: true }));
     res.json({ success: true, riders });
   } catch (error) {
     next(error);
@@ -128,13 +135,20 @@ const assignRider = (kind) => async (req, res, next) => {
     if (captain.status !== 'approved' && captain.accountStatus !== 'approved') {
       return res.status(400).json({ success: false, message: 'Only approved riders can be assigned.' });
     }
+    if (!(await RepairDriver.exists({ captain: captain._id }))) {
+      return res.status(400).json({ success: false, message: 'Only drivers added under Repair & Services (Add Driver) can be assigned to repair jobs.' });
+    }
 
     const booking = await loadBooking(req.params.id);
     if (!booking) return res.status(404).json({ success: false, message: 'Repair booking not found.' });
 
     if (kind === 'pickup') {
       if (!['REQUESTED', 'PICKUP_ASSIGNED'].includes(booking.status)) {
-        return res.status(400).json({ success: false, message: 'Pickup rider can only be assigned before pickup.' });
+        return res.status(400).json({ success: false, message: `The pickup is already in progress (status: ${REPAIR_STATUS_LABELS[booking.status] || booking.status}), so the pickup rider cannot be changed now.` });
+      }
+      const prevPickup = booking.pickupCaptainId?._id || booking.pickupCaptainId;
+      if (prevPickup && String(prevPickup) !== String(captain._id)) {
+        notifyCaptain(prevPickup, booking, 'Pickup re-assigned', `Pickup ${booking.bookingId} was given to another rider.`, 'JOB_CANCELLED');
       }
       booking.pickupCaptainId = captain._id;
       booking.pickupCaptainStatus = 'Assigned';
@@ -144,9 +158,19 @@ const assignRider = (kind) => async (req, res, next) => {
       notifyCustomer(booking, 'Pickup rider assigned', `A rider has been assigned to pick up your item for ${booking.bookingId}. Your pickup OTP is ${booking.pickupOtp} — share it only with the rider at pickup.`);
     } else {
       if (!['REPAIR_COMPLETED', 'QUOTATION_REJECTED', 'DELIVERY_ASSIGNED'].includes(booking.status)) {
-        return res.status(400).json({ success: false, message: 'Delivery rider can be assigned once repair is completed (or the quotation was rejected).' });
+        const inDelivery = ['DELIVERY_ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(booking.status);
+        return res.status(400).json({
+          success: false,
+          message: inDelivery
+            ? `The delivery is already in progress (status: ${REPAIR_STATUS_LABELS[booking.status] || booking.status}), so the delivery rider cannot be changed now.`
+            : `A delivery rider can be assigned once the repair is completed (or declined). Current status: ${REPAIR_STATUS_LABELS[booking.status] || booking.status}.`,
+        });
       }
       if (booking.status !== 'DELIVERY_ASSIGNED') booking.preDeliveryStatus = booking.status;
+      const prevDelivery = booking.deliveryCaptainId?._id || booking.deliveryCaptainId;
+      if (prevDelivery && String(prevDelivery) !== String(captain._id)) {
+        notifyCaptain(prevDelivery, booking, 'Delivery re-assigned', `Delivery ${booking.bookingId} was given to another rider.`, 'JOB_CANCELLED');
+      }
       booking.deliveryCaptainId = captain._id;
       booking.deliveryCaptainStatus = 'Assigned';
       pushHistory(booking, 'DELIVERY_ASSIGNED', { note: `Delivery rider: ${captain.name || captain.phone}`, byRole: 'admin', by: adminId(req) });
@@ -203,6 +227,139 @@ export const assignTechnician = async (req, res, next) => {
   }
 };
 
+// ── Repair workflow handled by admin (no technician account needed) ───────────────────────────
+// Mirrors the technician steps: diagnosis → quotation → (customer approves) → repair → completed.
+const wrongStep = (res, message) => res.status(400).json({ success: false, message });
+
+// PUT /api/repair/admin/bookings/:id/start-diagnosis
+export const startDiagnosis = async (req, res, next) => {
+  try {
+    const booking = await loadBooking(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Repair booking not found.' });
+    if (booking.status !== 'AT_REPAIR_CENTER') {
+      return wrongStep(res, 'Diagnosis can start only once the item has been handed over at the repair center.');
+    }
+    pushHistory(booking, 'DIAGNOSING', { note: 'Diagnosis started', byRole: 'admin', by: adminId(req) });
+    await booking.save();
+    notifyCustomer(booking, 'Diagnosis started', `Diagnosis has started for ${booking.bookingId}.`);
+    res.json({ success: true, message: 'Diagnosis started.', booking: await loadBooking(booking._id) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/repair/admin/bookings/:id/diagnosis   body: { findings, estimatedCost? }
+// Admin records the problem found. Nothing is sent to the customer's app for approval: the admin calls the
+// customer (details are shown in the panel) and then records the customer's decision.
+export const saveDiagnosis = async (req, res, next) => {
+  try {
+    const booking = await loadBooking(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Repair booking not found.' });
+    if (booking.status !== 'DIAGNOSING') {
+      return wrongStep(res, 'Start the diagnosis first, then record the problem you found.');
+    }
+    const findings = String(req.body.findings || '').trim();
+    if (!findings) return wrongStep(res, 'Please enter the problem you found.');
+    const estimate = req.body.estimatedCost === '' || req.body.estimatedCost == null ? 0 : Number(req.body.estimatedCost);
+    if (!Number.isFinite(estimate) || estimate < 0) return wrongStep(res, 'Estimated cost must be a valid amount.');
+
+    booking.diagnosis = { findings: findings.slice(0, 1000), photos: booking.diagnosis?.photos || [], diagnosedAt: new Date() };
+    booking.decisionMode = 'phone';
+    booking.quotation = {
+      items: estimate > 0 ? [{ label: 'Estimated repair cost', amount: estimate }] : [],
+      total: estimate,
+      estimatedDays: 0,
+      notes: '',
+      status: 'Sent', // = waiting for the customer's decision (taken by phone)
+      sentAt: new Date(),
+      respondedAt: null,
+      customerNote: '',
+    };
+    pushHistory(booking, 'QUOTATION_SENT', { note: 'Diagnosis recorded — admin to call the customer', byRole: 'admin', by: adminId(req) });
+    await booking.save();
+    notifyCustomer(booking, 'Diagnosis completed', `Diagnosis is complete for ${booking.bookingId}. Our team will call you shortly to discuss it.`);
+    res.json({ success: true, message: 'Diagnosis saved. Call the customer and record their decision.', booking: await loadBooking(booking._id) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/repair/admin/bookings/:id/customer-decision   body: { decision: 'approve' | 'reject', amount, note }
+// Admin records what the customer decided on the phone call.
+export const recordCustomerDecision = async (req, res, next) => {
+  try {
+    const decision = String(req.body.decision || '').toLowerCase();
+    if (!['approve', 'reject'].includes(decision)) return wrongStep(res, 'Decision must be approve or reject.');
+    const booking = await loadBooking(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Repair booking not found.' });
+    if (booking.status !== 'QUOTATION_SENT' || booking.quotation.status !== 'Sent') {
+      return wrongStep(res, 'Record the diagnosis first — there is no customer decision pending.');
+    }
+    const note = String(req.body.note || '').trim().slice(0, 500);
+
+    booking.quotation.respondedAt = new Date();
+    booking.quotation.customerNote = note;
+
+    if (decision === 'approve') {
+      const amount = Number(req.body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return wrongStep(res, 'Enter the repair amount agreed with the customer.');
+      const total = Math.round(amount * 100) / 100;
+      booking.quotation.items = [{ label: 'Repair cost (agreed by phone)', amount: total }];
+      booking.quotation.total = total;
+      booking.quotation.status = 'Approved';
+      booking.amountDue = total; // diagnosis fee is included in an approved repair
+      pushHistory(booking, 'QUOTATION_APPROVED', { note: `Customer agreed by phone — ₹${total}${note ? ` (${note})` : ''}`, byRole: 'admin', by: adminId(req) });
+      await booking.save();
+      notifyCustomer(booking, 'Repair approved', `Thanks! The repair for ${booking.bookingId} will start now. Amount payable on delivery: ₹${total}.`);
+    } else {
+      booking.quotation.status = 'Rejected';
+      booking.amountDue = booking.diagnosisFee; // only the diagnosis fee is payable
+      pushHistory(booking, 'QUOTATION_REJECTED', { note: `Customer declined by phone${note ? ` (${note})` : ''}`, byRole: 'admin', by: adminId(req) });
+      await booking.save();
+      notifyCustomer(booking, 'Repair declined', `As discussed, ${booking.bookingId} will be returned without repair.`);
+    }
+    res.json({ success: true, message: decision === 'approve' ? 'Customer approval recorded.' : 'Customer decline recorded.', booking: await loadBooking(booking._id) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/repair/admin/bookings/:id/start-repair
+export const startRepairByAdmin = async (req, res, next) => {
+  try {
+    const booking = await loadBooking(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Repair booking not found.' });
+    if (booking.status !== 'QUOTATION_APPROVED') {
+      return wrongStep(res, 'Repair can start only after the customer approves the quotation.');
+    }
+    pushHistory(booking, 'IN_REPAIR', { note: 'Repair started', byRole: 'admin', by: adminId(req) });
+    await booking.save();
+    notifyCustomer(booking, 'Repair started', `Repair has started for ${booking.bookingId}.`);
+    res.json({ success: true, message: 'Repair started.', booking: await loadBooking(booking._id) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/repair/admin/bookings/:id/complete-repair   body: { repairNotes }
+export const completeRepairByAdmin = async (req, res, next) => {
+  try {
+    const booking = await loadBooking(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Repair booking not found.' });
+    if (booking.status !== 'IN_REPAIR') {
+      return wrongStep(res, 'Start the repair before marking it completed.');
+    }
+    booking.repairNotes = String(req.body.repairNotes || '').slice(0, 1000);
+    booking.repairCompletedAt = new Date();
+    pushHistory(booking, 'REPAIR_COMPLETED', { note: 'Repair completed', byRole: 'admin', by: adminId(req) });
+    await booking.save();
+    notifyCustomer(booking, 'Repair completed', `Repair is complete for ${booking.bookingId}. Delivery will be arranged shortly.`);
+    res.json({ success: true, message: 'Repair marked as completed. Assign a delivery rider next.', booking: await loadBooking(booking._id) });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // PUT /api/repair/admin/bookings/:id/cancel
 export const cancelBooking = async (req, res, next) => {
   try {
@@ -216,6 +373,7 @@ export const cancelBooking = async (req, res, next) => {
     pushHistory(booking, 'CANCELLED', { note: booking.cancelReason, byRole: 'admin', by: adminId(req) });
     await booking.save();
     notifyCustomer(booking, 'Repair cancelled', `Repair ${booking.bookingId} was cancelled. ${booking.cancelReason}`);
+    notifyAssignedCaptainsCancelled(booking, booking.cancelReason);
     res.json({ success: true, message: 'Booking cancelled.', booking: await loadBooking(booking._id) });
   } catch (error) {
     next(error);
@@ -223,7 +381,7 @@ export const cancelBooking = async (req, res, next) => {
 };
 
 // ── Repair drivers (captain accounts created by admin for repair pickups / deliveries) ─────────
-const ACTIVE_PICKUP = ['PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP'];
+const ACTIVE_PICKUP = ['PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP', 'CENTER_RIDE_STARTED', 'REACHED_CENTER'];
 const ACTIVE_DELIVERY = ['DELIVERY_ASSIGNED', 'DELIVERY_ACCEPTED', 'OUT_FOR_DELIVERY'];
 
 const driverStats = async (captainId) => {
@@ -546,6 +704,13 @@ const cleanCategoryPayload = (body) => {
         name: String(p?.name || '').trim(),
         estimateMin: Math.max(0, Number(p?.estimateMin) || 0),
         estimateMax: Math.max(0, Number(p?.estimateMax) || 0),
+        subProblems: (Array.isArray(p?.subProblems) ? p.subProblems : [])
+          .map((s) => ({
+            name: String(s?.name || '').trim(),
+            estimateMin: Math.max(0, Number(s?.estimateMin) || 0),
+            estimateMax: Math.max(0, Number(s?.estimateMax) || 0),
+          }))
+          .filter((s) => s.name),
       }))
       .filter((p) => p.name);
   }

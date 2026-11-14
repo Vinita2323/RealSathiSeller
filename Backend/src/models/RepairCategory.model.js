@@ -20,6 +20,15 @@ const repairCategorySchema = new mongoose.Schema(
         name: { type: String, required: true, trim: true },
         estimateMin: { type: Number, default: 0, min: 0 },
         estimateMax: { type: Number, default: 0, min: 0 },
+        // Optional second level, shown on the next booking page after the customer picks this problem
+        subProblems: [
+          {
+            name: { type: String, required: true, trim: true },
+            estimateMin: { type: Number, default: 0, min: 0 },
+            estimateMax: { type: Number, default: 0, min: 0 },
+            _id: false,
+          },
+        ],
         _id: false,
       },
     ],

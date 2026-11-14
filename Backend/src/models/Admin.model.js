@@ -39,6 +39,17 @@ const adminSchema = new mongoose.Schema(
       enum: ['admin', 'super_admin'],
       default: 'admin',
     },
+    // Admin / repair-center drop-off address: drivers deliver repair parcels here
+    address: {
+      addressLine1: { type: String, trim: true, default: '' },
+      addressLine2: { type: String, trim: true, default: '' },
+      landmark: { type: String, trim: true, default: '' },
+      city: { type: String, trim: true, default: '' },
+      state: { type: String, trim: true, default: '' },
+      pincode: { type: String, trim: true, default: '' },
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
   },
   {
     timestamps: true,

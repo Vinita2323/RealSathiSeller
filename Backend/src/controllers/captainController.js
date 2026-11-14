@@ -8,6 +8,7 @@ import CaptainTransaction from '../models/CaptainTransaction.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import SellerNotification from '../models/SellerNotification.model.js';
 import TransportBooking from '../models/TransportBooking.model.js';
+import RepairBooking from '../models/RepairBooking.model.js';
 import Rating from '../models/Rating.model.js';
 import PayoutRequest from '../models/PayoutRequest.model.js';
 import PlatformLedger from '../models/PlatformLedger.model.js';
@@ -370,8 +371,25 @@ export const getDashboardStats = async (req, res, next) => {
 
     const todayEarnings = (todayTransactions || []).reduce((sum, t) => sum + (t.amount || 0), 0);
     // Orders already filtered by deliveredAt today; count all matches + completed transport
-    const deliveredToday = (todayOrders || []).length + (todayCompletedTransport || 0);
-    const totalBookings = (totalOrderBookings || 0) + (totalTransportBookings || 0);
+    let deliveredToday = (todayOrders || []).length + (todayCompletedTransport || 0);
+    let totalBookings = (totalOrderBookings || 0) + (totalTransportBookings || 0);
+
+    // Repair & Services work counts too: finished legs today, all repair jobs ever, and jobs waiting for this captain
+    let repairPending = 0;
+    try {
+      const [pickupsToday, deliveriesToday, repairTotal, pendingPickups, pendingDeliveries] = await Promise.all([
+        RepairBooking.countDocuments({ pickupCaptainId: captainId, atCenterAt: { $gte: startOfDay, $lte: endOfDay } }),
+        RepairBooking.countDocuments({ deliveryCaptainId: captainId, status: 'DELIVERED', deliveredAt: { $gte: startOfDay, $lte: endOfDay } }),
+        RepairBooking.countDocuments({ $or: [{ pickupCaptainId: captainId }, { deliveryCaptainId: captainId }], status: { $ne: 'CANCELLED' } }),
+        RepairBooking.countDocuments({ pickupCaptainId: captainId, pickupCaptainStatus: { $in: ['Assigned', 'Accepted'] }, status: { $in: ['PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP', 'CENTER_RIDE_STARTED', 'REACHED_CENTER'] } }),
+        RepairBooking.countDocuments({ deliveryCaptainId: captainId, deliveryCaptainStatus: { $in: ['Assigned', 'Accepted'] }, status: { $in: ['DELIVERY_ASSIGNED', 'DELIVERY_ACCEPTED', 'OUT_FOR_DELIVERY'] } }),
+      ]);
+      deliveredToday += pickupsToday + deliveriesToday;
+      totalBookings += repairTotal;
+      repairPending = pendingPickups + pendingDeliveries;
+    } catch (repairErr) {
+      console.warn('[Dashboard] repair counts skipped:', repairErr.message);
+    }
 
     // Build weekly earnings array from aggregation results
     const aggMap = new Map();
@@ -534,7 +552,7 @@ export const getDashboardStats = async (req, res, next) => {
         todayEarnings,
         totalBookings,
         deliveredToday,
-        pendingCount: totalPending,
+        pendingCount: totalPending + repairPending,
         totalAssignedToday: (todayOrders || []).length,
       },
       pendingOrders: deliveryOrders,

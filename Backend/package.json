@@ -5,8 +5,8 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "start": "node api.js && node src/server.js",
-    "dev": "node api.js && nodemon src/server.js",
+    "start": "node init && node src/server.js",
+    "dev": "node init && nodemon src/server.js",
     "seed:membership": "node src/seeders/membershipSeed.js",
     "validate:env": "node ../validate-env.js"
   },

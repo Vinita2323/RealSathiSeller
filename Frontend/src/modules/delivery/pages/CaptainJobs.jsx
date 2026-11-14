@@ -2,44 +2,74 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService, returnService } from '../../../services/authService';
-import { transportService } from '../../../services/transportService';
+import repairService from '../../../services/repairService';
 import { markJobAsDismissed } from '../utils/jobDismissal';
 import RatingModal from '../../../components/RatingModal';
 
 const CaptainJobs = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'deliveries';
+  const initialTab = (searchParams.get('tab') === 'transport' ? 'deliveries' : searchParams.get('tab')) || 'deliveries';
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [acceptedJob, setAcceptedJob] = useState(null);
   const [selectedDetailJob, setSelectedDetailJob] = useState(null);
   const [ratingJob, setRatingJob] = useState(null);
   const [jobs, setJobs] = useState([]);
-  const [transportRequests, setTransportRequests] = useState([]);
   const [returnJobs, setReturnJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [counts, setCounts] = useState({ transport: 0, deliveries: 0, returns: 0, completed: 0 });
+  const [repairDone, setRepairDone] = useState([]); // completed repair legs of this captain (shown under Completed)
+  useEffect(() => {
+    if (activeTab !== 'completed') return undefined;
+    let cancelled = false;
+    const loadDone = async () => {
+      try {
+        const res = await repairService.captain.getJobs('history');
+        const rows = (res?.bookings || []).flatMap((b) => (b.completedLegs || []).map((l) => ({ ...l, booking: b })));
+        rows.sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0));
+        if (!cancelled) setRepairDone(rows);
+      } catch { /* silent */ }
+    };
+    loadDone();
+    const t = setInterval(() => { if (!document.hidden) loadDone(); }, 15000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [activeTab]);
+
+  const [repairCount, setRepairCount] = useState(0); // active Repair & Services pickups + deliveries for this captain
+
+  // Keep the Repair tab count fresh (repair jobs themselves live on /captain/repair-jobs)
+  useEffect(() => {
+    let cancelled = false;
+    const loadRepairCount = async () => {
+      if (document.hidden) return;
+      try {
+        const [p, d] = await Promise.all([repairService.captain.getJobs('pickups'), repairService.captain.getJobs('deliveries')]);
+        if (!cancelled) setRepairCount((p?.count || 0) + (d?.count || 0));
+      } catch { /* silent */ }
+    };
+    loadRepairCount();
+    const t = setInterval(loadRepairCount, 10000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
 
   // Sync tab with URL search parameter if changed externally
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && tabParam !== activeTab) {
+    if (tabParam && tabParam !== 'transport' && tabParam !== activeTab) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
 
   const fetchTabCounts = useCallback(async () => {
     try {
-      const [transRes, delivRes, retRes, compRes] = await Promise.allSettled([
-        transportService.captainGetRequests(),
+      const [delivRes, retRes, compRes] = await Promise.allSettled([
         captainService.getJobs('deliveries'),
         returnService.getCaptainReturnJobs('available'),
         captainService.getJobs('completed'),
       ]);
       setCounts({
-        transport: transRes.status === 'fulfilled' ? (transRes.value.requests?.length || 0) : 0,
         deliveries: delivRes.status === 'fulfilled' ? (delivRes.value.orders?.length || 0) : 0,
         returns: retRes.status === 'fulfilled' ? (retRes.value.returnJobs?.length || 0) : 0,
         completed: compRes.status === 'fulfilled' ? (compRes.value.orders?.length || 0) : 0,
@@ -50,26 +80,21 @@ const CaptainJobs = () => {
   const fetchJobs = useCallback(async (tab, silent = false) => {
     if (!silent) setLoading(true);
     try {
-      if (tab === 'transport') {
-        const res = await transportService.captainGetRequests();
-        const reqList = res.requests || [];
-        setTransportRequests(reqList);
-        setCounts((prev) => ({ ...prev, transport: reqList.length }));
-      } else if (tab === 'returns') {
+      if (tab === 'returns') {
         const res = await returnService.getCaptainReturnJobs('available');
         const retList = res.returnJobs || [];
         setReturnJobs(retList);
         setCounts((prev) => ({ ...prev, returns: retList.length }));
       } else {
         const res = await captainService.getJobs(tab);
-        const orderList = res.orders || [];
+        // Transport rides are no longer part of the captain app
+        const orderList = (res.orders || []).filter((o) => !o.isTransport && !String(o.orderId || o.bookingId || '').startsWith('TRB'));
         setJobs(orderList);
         setCounts((prev) => ({ ...prev, [tab]: orderList.length }));
       }
     } catch (err) {
       console.error('Fetch jobs error:', err);
-      if (tab === 'transport') setTransportRequests([]);
-      else if (tab === 'returns') setReturnJobs([]);
+      if (tab === 'returns') setReturnJobs([]);
       else setJobs([]);
     } finally {
       if (!silent) setLoading(false);
@@ -88,45 +113,10 @@ const CaptainJobs = () => {
   }, [activeTab, fetchJobs, fetchTabCounts]);
 
   const handleTabChange = (tab) => {
+    if (tab === 'repair') { navigate('/captain/repair-jobs'); return; }
     setActiveTab(tab);
     setSearchParams({ tab });
     setSearchQuery('');
-  };
-
-  // Accept transport request
-  const handleAcceptTransport = async (request) => {
-    setActionLoading(request._id);
-    try {
-      const res = await transportService.captainAcceptRequest(request.bookingId || request._id);
-      markJobAsDismissed(request);
-      setAcceptedJob({
-        ...request,
-        orderId: request.bookingId,
-        captainEarnings: request.estimatedEarnings,
-        shippingAddress: { city: request.dropLocation?.city || request.dropLocation?.address },
-        isTransport: true,
-      });
-      fetchJobs('transport');
-    } catch (err) {
-      console.error('Accept transport request error:', err);
-      alert(err?.response?.data?.message || err?.message || 'Failed to accept transport request.');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Reject transport request
-  const handleRejectTransport = async (request) => {
-    setActionLoading(request._id);
-    try {
-      markJobAsDismissed(request);
-      await transportService.captainRejectRequest(request.bookingId || request._id);
-      fetchJobs('transport');
-    } catch (err) {
-      console.error('Reject transport error:', err);
-    } finally {
-      setActionLoading(null);
-    }
   };
 
   // Accept normal delivery order
@@ -239,18 +229,6 @@ const CaptainJobs = () => {
     );
   });
 
-  const filteredTransport = transportRequests.filter((t) => {
-    const q = searchQuery.toLowerCase();
-    if (!q) return true;
-    return (
-      t.bookingId?.toLowerCase().includes(q) ||
-      t.customerName?.toLowerCase().includes(q) ||
-      t.pickupLocation?.address?.toLowerCase().includes(q) ||
-      t.dropLocation?.address?.toLowerCase().includes(q) ||
-      t.goods?.category?.toLowerCase().includes(q)
-    );
-  });
-
   const filteredReturns = returnJobs.filter((r) => {
     const q = searchQuery.toLowerCase();
     if (!q) return true;
@@ -320,10 +298,10 @@ const CaptainJobs = () => {
         {/* Tab Pills: 1. Transport Requests, 2. Delivery, 3. Return Pickups, 4. Completed */}
         <div className="flex gap-2 overflow-x-auto hide-scrollbar py-0.5">
           {[
-            { key: 'transport', label: 'Transport', icon: 'local_shipping', count: transportRequests.length },
             { key: 'deliveries', label: 'Delivery', icon: 'package_2', count: activeTab === 'deliveries' ? jobs.length : undefined },
             { key: 'returns', label: 'Return Pickups', icon: 'keyboard_return', count: counts.returns },
-            { key: 'completed', label: 'Completed', icon: 'check_circle', count: activeTab === 'completed' ? jobs.length : undefined },
+            { key: 'repair', label: 'Repair', icon: 'build', count: repairCount },
+            { key: 'completed', label: 'Completed', icon: 'check_circle', count: activeTab === 'completed' ? jobs.length + repairDone.length : undefined },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -357,141 +335,35 @@ const CaptainJobs = () => {
           </div>
         )}
 
-        {/* ── TAB 1: TRANSPORT REQUESTS ── */}
-        {!loading && activeTab === 'transport' && (
-          <>
-            {filteredTransport.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
-                <span className="material-symbols-outlined text-5xl text-slate-300">local_shipping</span>
-                <p className="font-bold text-slate-700">No New Transport Requests</p>
-                <p className="text-xs text-slate-400">
-                  When users in your area book a transport vehicle, ride requests will appear here in real-time.
-                </p>
-              </div>
-            ) : (
-              filteredTransport.map((req) => {
-                const isActing = actionLoading === req._id;
-                return (
-                  <div
-                    key={req._id}
-                    className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
-                  >
-                    {/* Header Row 1: ID and Price */}
-                    <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                        <span className="font-mono text-xs font-bold text-slate-800 truncate">
-                          #{req.bookingId}
-                        </span>
-                      </div>
-                      <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
-                        ₹{(req.estimatedEarnings || 0).toFixed(2)}
-                      </span>
-                    </div>
-
-                    {/* Header Row 2: Badge & Cargo details */}
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0 flex items-center gap-1">
-                          <span>🚚</span> Transport
-                        </span>
-                        <span className="text-xs font-medium text-slate-600 truncate">
-                          {req.goods?.category} • {req.goods?.weightKg}kg ({req.goods?.packages} pkgs)
-                        </span>
-                      </div>
-                      {req.paymentMethod && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                          {req.paymentMethod}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Route Timeline Box */}
-                    <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-2">
-                      <div className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Pickup</span>
-                          <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{req.pickupLocation?.address}</p>
-                        </div>
-                      </div>
-                      {Array.isArray(req.stops) &&
-                        req.stops.filter(Boolean).map((stop, idx) => (
-                          <div key={idx} className="flex items-start gap-2">
-                            <span className="w-2 h-2 rounded-full bg-sky-500 mt-1 shrink-0"></span>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-[8px] font-bold text-sky-700 uppercase tracking-wider block">
-                                Stop {idx + 1}
-                              </span>
-                              <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
-                                {typeof stop === 'string'
-                                  ? stop
-                                  : stop?.address ||
-                                    [stop?.addressLine1, stop?.city].filter(Boolean).join(', ') ||
-                                    `Stop ${idx + 1}`}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      <div className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Drop</span>
-                          <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{req.dropLocation?.address}</p>
-                        </div>
-                      </div>
-                      {(req.distanceFromCaptainKm != null || req.distanceKm) && (
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
-                          <span>
-                            📍{' '}
-                            {req.distanceFromCaptainKm != null
-                              ? `${req.distanceFromCaptainKm} km away`
-                              : `${req.distanceKm} km`}
-                          </span>
-                          <span>⏱ ~{req.estimatedDurationMin || 15} mins</span>
-                          {(req.paymentMethod === 'COD' || req.paymentMethod === 'CASH') && (
-                            <span className="font-bold text-amber-700">
-                              COD ₹{Number(req.fareBreakdown?.totalFare || 0).toFixed(0)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Actions: View Details, Reject & Accept (Clean text without icons) */}
-                    <div className="flex items-center gap-2 pt-0.5">
-                      <button
-                        onClick={() => setSelectedDetailJob({ ...req, isTransport: true })}
-                        className="py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                      >
-                        Details
-                      </button>
-                      <button
-                        onClick={() => handleRejectTransport(req)}
-                        disabled={isActing}
-                        className="py-2 px-4 bg-white hover:bg-red-50 border border-red-200 text-red-600 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50 shrink-0"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        onClick={() => handleAcceptTransport(req)}
-                        disabled={isActing}
-                        className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center disabled:opacity-60 truncate"
-                      >
-                        {isActing ? 'Claiming…' : 'Accept Request'}
-                      </button>
-                    </div>
+        {/* ── TAB 2 & 3: DELIVERY ORDERS & COMPLETED ── */}
+        {!loading && activeTab === 'completed' && repairDone.length > 0 && (
+          <section className="space-y-2.5">
+            <h3 className="text-[13px] font-extrabold text-slate-700 m-0 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px] text-[#15803d]">build</span> Repair jobs completed
+            </h3>
+            {repairDone.map((row) => (
+              <div key={`${row.booking._id}-${row.leg}`} className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-2xs space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-sm text-slate-900 m-0 truncate">{row.booking.brand} {row.booking.model}</p>
+                    <p className="text-[11px] font-semibold text-slate-400 m-0">{row.booking.categoryName} · #{row.booking.bookingId}</p>
                   </div>
-                );
-              })
-            )}
-          </>
+                  <span className="shrink-0 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {row.leg === 'pickup' ? 'Pickup done' : 'Delivered'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">{row.at ? new Date(row.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  <span className="font-extrabold text-[#15803d]">{row.earnings > 0 ? `+ ₹${Number(row.earnings).toFixed(2)}` : 'Earnings pending'}</span>
+                </div>
+              </div>
+            ))}
+          </section>
         )}
 
-        {/* ── TAB 2 & 3: DELIVERY ORDERS & COMPLETED ── */}
         {!loading && activeTab !== 'transport' && activeTab !== 'returns' && (
           <>
-            {filteredJobs.length === 0 ? (
+            {filteredJobs.length === 0 && !(activeTab === 'completed' && repairDone.length > 0) ? (
               <div className="bg-white rounded-xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
                 <span className="material-symbols-outlined text-5xl text-slate-300">
                   {activeTab === 'completed' ? 'task_alt' : 'package_2'}
@@ -501,7 +373,7 @@ const CaptainJobs = () => {
                 </p>
                 <p className="text-xs text-slate-400">
                   {activeTab === 'completed'
-                    ? 'All your completed transport rides and product deliveries will appear here.'
+                    ? 'Your completed product deliveries and repair jobs will appear here.'
                     : 'Assigned e-commerce packages will appear here once online.'}
                 </p>
               </div>
