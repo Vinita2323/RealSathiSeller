@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 import RepairBooking from '../models/RepairBooking.model.js';
 import RepairCenter from '../models/RepairCenter.model.js';
 import RepairPayment from '../models/RepairPayment.model.js';
-import { pushHistory, sanitizeForStaff, notifyCustomer } from '../utils/repairHelpers.js';
+import { creditRepairLeg, recordRepairCashCollected } from '../utils/repairEarnings.js';
+import { getDefaultDropLocation, dropLocationFor } from '../utils/repairDropLocation.js';
+import { pushHistory, sanitizeForStaff, notifyCustomer, generateRepairOtp } from '../utils/repairHelpers.js';
 
 const POPULATE_CENTER = { path: 'repairCenter', select: 'name address city phone lat lng' };
 
@@ -11,12 +13,19 @@ const findMyJob = async (req) => {
   const { id } = req.params;
   const captainId = req.user.id;
   const idQuery = mongoose.Types.ObjectId.isValid(id) ? { $or: [{ _id: id }, { bookingId: id }] } : { bookingId: id };
+  // $and keeps BOTH conditions. (Spreading idQuery next to a second $or would overwrite its $or and drop the id match,
+  // returning any other job of this captain.)
   const booking = await RepairBooking.findOne({
-    ...idQuery,
-    $or: [{ pickupCaptainId: captainId }, { deliveryCaptainId: captainId }],
+    $and: [idQuery, { $or: [{ pickupCaptainId: captainId }, { deliveryCaptainId: captainId }] }],
   }).populate(POPULATE_CENTER);
   return booking;
 };
+
+// Staff view of a booking plus where the parcel must be dropped / collected (repair center or admin address)
+const staffView = async (booking, fallback) => ({
+  ...sanitizeForStaff(booking),
+  dropLocation: dropLocationFor(booking, fallback === undefined ? await getDefaultDropLocation() : fallback),
+});
 
 const isMyPickup = (booking, captainId) => String(booking.pickupCaptainId || '') === String(captainId);
 const isMyDelivery = (booking, captainId) => String(booking.deliveryCaptainId || '') === String(captainId);
@@ -34,7 +43,7 @@ export const getCaptainJobs = async (req, res, next) => {
       query = {
         pickupCaptainId: captainId,
         pickupCaptainStatus: { $in: ['Assigned', 'Accepted'] },
-        status: { $in: ['PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP'] },
+        status: { $in: ['PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP', 'CENTER_RIDE_STARTED', 'REACHED_CENTER'] },
       };
     } else if (tab === 'deliveries') {
       query = {
@@ -55,7 +64,17 @@ export const getCaptainJobs = async (req, res, next) => {
       .sort({ updatedAt: -1 })
       .limit(50);
 
-    res.json({ success: true, bookings: bookings.map(sanitizeForStaff), count: bookings.length });
+    const fallbackDrop = await getDefaultDropLocation();
+    const me = String(captainId);
+    const views = await Promise.all(bookings.map(async (b) => {
+      const view = await staffView(b, fallbackDrop);
+      // Which legs of this booking did I finish (and what did each pay)? Used by the Completed list.
+      const completedLegs = [];
+      if (String(b.pickupCaptainId || '') === me && b.atCenterAt) completedLegs.push({ leg: 'pickup', earnings: b.pickupCaptainEarnings || 0, at: b.atCenterAt });
+      if (String(b.deliveryCaptainId || '') === me && b.status === 'DELIVERED') completedLegs.push({ leg: 'delivery', earnings: b.deliveryCaptainEarnings || 0, at: b.deliveredAt });
+      return { ...view, completedLegs };
+    }));
+    res.json({ success: true, bookings: views, count: views.length });
   } catch (error) {
     next(error);
   }
@@ -72,11 +91,12 @@ export const getPendingOffers = async (req, res, next) => {
         { deliveryCaptainId: captainId, deliveryCaptainStatus: 'Assigned', status: 'DELIVERY_ASSIGNED' },
       ],
     })
-      .select('bookingId categoryName brand model problem pickupAddress pickupSlot status updatedAt repairCenter')
+      .select('bookingId categoryName brand model problem subProblem pickupAddress pickupSlot status updatedAt repairCenter')
       .populate(POPULATE_CENTER)
       .sort({ updatedAt: -1 })
       .limit(10);
-    const offers = bookings.map((b) => ({ ...sanitizeForStaff(b), offerType: b.status === 'DELIVERY_ASSIGNED' ? 'delivery' : 'pickup' }));
+    const fallbackDrop = await getDefaultDropLocation();
+    const offers = await Promise.all(bookings.map(async (b) => ({ ...(await staffView(b, fallbackDrop)), offerType: b.status === 'DELIVERY_ASSIGNED' ? 'delivery' : 'pickup' })));
     res.json({ success: true, offers });
   } catch (error) {
     next(error);
@@ -207,14 +227,15 @@ export const verifyPickupOtp = async (req, res, next) => {
     pushHistory(booking, 'PICKED_UP', { note: 'Item picked up from customer', byRole: 'captain', by: captainId });
     await booking.save();
     notifyCustomer(booking, 'Item picked up', `Your item for ${booking.bookingId} has been picked up and is on its way to the repair center.`);
-    res.json({ success: true, message: 'Pickup verified. Take the item to the repair center.', booking: sanitizeForStaff(booking) });
+    res.json({ success: true, message: 'Pickup verified. Take the item to the repair center.', booking: await staffView(booking) });
   } catch (error) {
     next(error);
   }
 };
 
-// PUT /api/repair/captain/jobs/:id/handover   (item handed over at the repair center)
-export const handoverAtCenter = async (req, res, next) => {
+// PUT /api/repair/captain/jobs/:id/start-center-ride
+// After pickup the rider starts the ride to the repair center (customer + admin see "On the way to repair center").
+export const startRideToCenter = async (req, res, next) => {
   try {
     const captainId = req.user.id;
     const booking = await findMyJob(req);
@@ -222,21 +243,70 @@ export const handoverAtCenter = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Repair job not found.' });
     }
     if (booking.status !== 'PICKED_UP') {
-      return wrongStage(res, 'Verify pickup OTP before handing over at the center.');
+      return wrongStage(res, 'Pick up the item from the customer first, then start the ride to the repair center.');
     }
+    // Pre-assign the first active center when admin has not chosen one (no center is not fatal: admin can still guide the rider)
     if (!booking.repairCenter) {
       const center = await RepairCenter.findOne({ active: true }).sort({ createdAt: 1 });
-      if (!center) {
-        return wrongStage(res, 'No repair center is available. Please contact admin.');
-      }
-      booking.repairCenter = center._id;
+      if (center) booking.repairCenter = center._id;
     }
-    booking.atCenterAt = new Date();
-    pushHistory(booking, 'AT_REPAIR_CENTER', { note: 'Item handed over at repair center', byRole: 'captain', by: captainId });
+    booking.centerRideStartedAt = new Date();
+    pushHistory(booking, 'CENTER_RIDE_STARTED', { note: 'Rider started the ride to the repair center', byRole: 'captain', by: captainId });
     await booking.save();
     await booking.populate(POPULATE_CENTER);
-    notifyCustomer(booking, 'At repair center', `Your item for ${booking.bookingId} has reached the repair center. Diagnosis will start soon.`);
-    res.json({ success: true, message: 'Item handed over at the repair center.', booking: sanitizeForStaff(booking) });
+    notifyCustomer(booking, 'On the way to the repair center', `Your item for ${booking.bookingId} is on its way to the repair center.`);
+    res.json({ success: true, message: 'Ride to the repair center started.', booking: await staffView(booking) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/repair/captain/jobs/:id/reached-center
+// Rider arrived at the repair center → admin is alerted and gives the handover OTP.
+export const markReachedCenter = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const booking = await findMyJob(req);
+    if (!booking || !isMyPickup(booking, captainId)) {
+      return res.status(404).json({ success: false, message: 'Repair job not found.' });
+    }
+    if (booking.status !== 'CENTER_RIDE_STARTED') {
+      return wrongStage(res, 'Start the ride to the repair center first.');
+    }
+    if (!booking.centerOtp) booking.centerOtp = generateRepairOtp(); // bookings created before this step existed
+    booking.reachedCenterAt = new Date();
+    pushHistory(booking, 'REACHED_CENTER', { note: 'Rider reached the repair center', byRole: 'captain', by: captainId });
+    await booking.save();
+    await booking.populate(POPULATE_CENTER);
+    res.json({ success: true, message: 'Reached. Ask the repair center for the handover OTP.', booking: await staffView(booking) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/repair/captain/jobs/:id/verify-center-otp   body: { otp }
+// The repair center gives the OTP to the rider; a correct OTP completes the handover (item is now at the center).
+export const verifyCenterOtp = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const booking = await findMyJob(req);
+    if (!booking || !isMyPickup(booking, captainId)) {
+      return res.status(404).json({ success: false, message: 'Repair job not found.' });
+    }
+    if (booking.status !== 'REACHED_CENTER') {
+      return wrongStage(res, 'Mark "Reached repair center" before entering the handover OTP.');
+    }
+    if (String(req.body.otp || '').trim() !== booking.centerOtp) {
+      return res.status(400).json({ success: false, message: 'Invalid handover OTP. Please ask the repair center.' });
+    }
+    booking.centerOtpVerified = true;
+    booking.atCenterAt = new Date();
+    pushHistory(booking, 'AT_REPAIR_CENTER', { note: 'Item handed over at the repair center (OTP verified)', byRole: 'captain', by: captainId });
+    await booking.save();
+    await booking.populate(POPULATE_CENTER);
+    try { await creditRepairLeg(booking, 'pickup'); } catch (e) { console.warn('[RepairEarnings] pickup credit failed:', e.message); }
+    notifyCustomer(booking, 'At repair center', `Your item for ${booking.bookingId} has been handed over at the repair center. Diagnosis will start soon.`);
+    res.json({ success: true, message: 'Handover verified. The item is now at the repair center.', booking: await staffView(booking) });
   } catch (error) {
     next(error);
   }
@@ -256,7 +326,7 @@ export const collectFromCenter = async (req, res, next) => {
     pushHistory(booking, 'OUT_FOR_DELIVERY', { note: 'Rider collected the item from repair center', byRole: 'captain', by: captainId });
     await booking.save();
     notifyCustomer(booking, 'Out for delivery', `Your item for ${booking.bookingId} is out for delivery. Your delivery OTP is ${booking.deliveryOtp} — share it with the rider once you receive the item.`);
-    res.json({ success: true, message: 'Marked out for delivery.', booking: sanitizeForStaff(booking) });
+    res.json({ success: true, message: 'Marked out for delivery.', booking: await staffView(booking) });
   } catch (error) {
     next(error);
   }
@@ -300,6 +370,10 @@ export const verifyDeliveryOtp = async (req, res, next) => {
     booking.paymentStatus = 'Paid';
     pushHistory(booking, 'DELIVERED', { note: 'Delivered and confirmed with customer OTP', byRole: 'captain', by: captainId });
     await booking.save();
+    try {
+      await creditRepairLeg(booking, 'delivery');
+      if (amount > 0 && method === 'CASH') await recordRepairCashCollected(captainId, amount);
+    } catch (e) { console.warn('[RepairEarnings] delivery credit failed:', e.message); }
     notifyCustomer(booking, 'Delivered', `Your item for ${booking.bookingId} has been delivered. Thank you!`);
     res.json({ success: true, message: 'Delivery confirmed.', booking: sanitizeForStaff(booking) });
   } catch (error) {

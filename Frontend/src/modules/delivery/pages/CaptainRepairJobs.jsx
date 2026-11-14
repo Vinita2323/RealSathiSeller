@@ -20,6 +20,28 @@ const mapsLink = (addr = {}) => {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
 };
 
+// Google Maps directions to the repair center
+const centerMapsLink = (c = {}) => {
+  const hasCoords = Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lng)) && c.lat !== null && c.lng !== null;
+  const dest = hasCoords ? `${c.lat},${c.lng}` : (c.fullAddress || [c.name, c.address, c.city].filter(Boolean).join(', '));
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+};
+
+// Where the parcel is dropped / collected: the repair center, or the admin's address when no center is set
+const dropOf = (job) => job.dropLocation || job.repairCenter || null;
+const dropText = (d) => d.fullAddress || [d.address, d.city].filter(Boolean).join(', ');
+const centerInfo = (job) => {
+  const d = dropOf(job);
+  return d ? (
+    <p className="text-[11px] font-semibold text-slate-600 m-0 flex items-start gap-1.5">
+      <Building2 size={13} className="mt-0.5 shrink-0" />
+      <span>Take to: {d.source === 'admin' ? 'Admin' : d.name} — {dropText(d)}{d.phone ? ` · ${d.phone}` : ''}</span>
+    </p>
+  ) : (
+    <p className="text-[11px] font-semibold text-amber-700 m-0">Drop-off address is not set yet — please ask admin where to take the item.</p>
+  );
+};
+
 const CaptainRepairJobs = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState('pickups');
@@ -144,15 +166,38 @@ const CaptainRepairJobs = () => {
       case 'PICKED_UP':
         return (
           <div className="space-y-2">
-            {job.repairCenter && (
-              <p className="text-[11px] font-semibold text-slate-600 m-0 flex items-start gap-1.5">
-                <Building2 size={13} className="mt-0.5 shrink-0" />
-                Take to: {job.repairCenter.name}, {job.repairCenter.address}
-              </p>
-            )}
-            <Btn disabled={busyId === id} onClick={() => run(id, () => repairService.captain.handover(id))}>
-              Handed Over At Repair Center
+            <p className="text-[11px] font-bold text-[#15803d] m-0">Item picked up. Take it to the repair center.</p>
+            {centerInfo(job)}
+            <Btn disabled={busyId === id} onClick={() => run(id, () => repairService.captain.startCenterRide(id))}>
+              {busyId === id ? 'Please wait…' : 'Start Ride to Repair Center'}
             </Btn>
+          </div>
+        );
+      case 'CENTER_RIDE_STARTED':
+        return (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold text-[#15803d] m-0">You are on the way to the repair center.</p>
+            {centerInfo(job)}
+            {dropOf(job) && (
+              <a href={centerMapsLink(dropOf(job))} target="_blank" rel="noreferrer" className="block w-full px-3 py-3 text-center rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] leading-tight font-extrabold no-underline">
+                Open navigation
+              </a>
+            )}
+            <Btn disabled={busyId === id} onClick={() => run(id, () => repairService.captain.reachedCenter(id))}>
+              {busyId === id ? 'Please wait…' : "I've Reached the Repair Center"}
+            </Btn>
+          </div>
+        );
+      case 'REACHED_CENTER':
+        return (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold text-[#15803d] m-0">You have reached the repair center. Ask the center staff for the handover OTP.</p>
+            {renderOtpRow({
+              job,
+              placeholder: 'Repair center OTP',
+              label: 'Verify OTP & Hand Over',
+              onSubmit: (otp) => run(id, () => repairService.captain.verifyCenterOtp(id, otp), true),
+            })}
           </div>
         );
       case 'DELIVERY_ASSIGNED':
@@ -165,11 +210,16 @@ const CaptainRepairJobs = () => {
       case 'DELIVERY_ACCEPTED':
         return (
           <div className="space-y-2">
-            {job.repairCenter && (
+            {dropOf(job) && (
               <p className="text-[11px] font-semibold text-slate-600 m-0 flex items-start gap-1.5">
                 <Building2 size={13} className="mt-0.5 shrink-0" />
-                Collect from: {job.repairCenter.name}, {job.repairCenter.address}
+                <span>Collect from: {dropOf(job).source === 'admin' ? 'Admin' : dropOf(job).name} — {dropText(dropOf(job))}</span>
               </p>
+            )}
+            {dropOf(job) && (
+              <a href={centerMapsLink(dropOf(job))} target="_blank" rel="noreferrer" className="block w-full px-3 py-3 text-center rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] leading-tight font-extrabold no-underline">
+                Open navigation
+              </a>
             )}
             <Btn disabled={busyId === id} onClick={() => run(id, () => repairService.captain.collect(id))}>
               Collected — Start Delivery
@@ -253,7 +303,7 @@ const CaptainRepairJobs = () => {
                   </div>
                   <RepairStatusChip status={job.status} />
                 </div>
-                <p className="text-[11px] text-slate-600 m-0">Problem: {job.problem}</p>
+                <p className="text-[11px] text-slate-600 m-0">Problem: {job.problem}{job.subProblem ? ` → ${job.subProblem}` : ""}</p>
                 <div className="text-[11px] text-slate-600 flex items-start gap-1.5">
                   <MapPin size={13} className="mt-0.5 shrink-0" />
                   <span>
