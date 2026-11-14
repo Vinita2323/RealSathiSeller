@@ -20,7 +20,7 @@ const JOURNEY = [
 // Map every status onto the furthest journey step it represents
 const STEP_INDEX = {
   REQUESTED: 0, PICKUP_ASSIGNED: 0, PICKUP_ACCEPTED: 0, PICKUP_STARTED: 0, REACHED_CUSTOMER: 0,
-  PICKED_UP: 1,
+  PICKED_UP: 1, CENTER_RIDE_STARTED: 1, REACHED_CENTER: 1,
   AT_REPAIR_CENTER: 2,
   DIAGNOSING: 2, QUOTATION_SENT: 3, QUOTATION_APPROVED: 3, QUOTATION_REJECTED: 3,
   IN_REPAIR: 4,
@@ -103,6 +103,7 @@ const RepairTrack = () => {
   const cancelled = booking.status === 'CANCELLED';
   const stepIdx = STEP_INDEX[booking.status] ?? 0;
   const q = booking.quotation || {};
+  const phoneMode = booking.decisionMode === 'phone'; // admin discusses the diagnosis with the customer by phone
   const canCancel = ['REQUESTED', 'PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED'].includes(booking.status);
   const rider = ['DELIVERY_ASSIGNED', 'DELIVERY_ACCEPTED', 'OUT_FOR_DELIVERY'].includes(booking.status)
     ? booking.deliveryCaptainId
@@ -118,7 +119,7 @@ const RepairTrack = () => {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-[14px] font-extrabold text-[#1e1b4b] m-0">{booking.brand} {booking.model}</h2>
-              <p className="text-[11px] font-semibold text-slate-400 m-0">{booking.categoryName} · {booking.problem}</p>
+              <p className="text-[11px] font-semibold text-slate-400 m-0">{booking.categoryName} · {booking.problem}{booking.subProblem ? ` → ${booking.subProblem}` : ""}</p>
             </div>
             <RepairStatusChip status={booking.status} />
           </div>
@@ -152,6 +153,19 @@ const RepairTrack = () => {
           </div>
         )}
 
+        {booking.status === 'CENTER_RIDE_STARTED' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <p className="text-[13px] font-extrabold text-blue-900 m-0">Your item is on its way to the repair center</p>
+            <p className="text-[11px] text-blue-700 m-0">The rider is taking it to the repair center for diagnosis.</p>
+          </div>
+        )}
+        {booking.status === 'REACHED_CENTER' && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+            <p className="text-[13px] font-extrabold text-emerald-900 m-0">Your item has reached the repair center</p>
+            <p className="text-[11px] text-emerald-700 m-0">The handover is being confirmed. Diagnosis starts right after.</p>
+          </div>
+        )}
+
         {/* OTP for rider */}
         {booking.pickupOtp && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between">
@@ -177,10 +191,18 @@ const RepairTrack = () => {
         )}
 
         {/* Quotation */}
-        {q.status && q.status !== 'None' && (
+        {phoneMode && booking.status === 'QUOTATION_SENT' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1.5">
+            <p className="text-[13px] font-extrabold text-amber-900 m-0">Diagnosis completed</p>
+            {booking.diagnosis?.findings && <p className="text-[12px] text-amber-900 m-0"><b>Problem found:</b> {booking.diagnosis.findings}</p>}
+            <p className="text-[11px] text-amber-800 m-0">Our team will call you shortly to discuss the repair and the cost. No action is needed in the app.</p>
+          </div>
+        )}
+
+        {q.status && q.status !== 'None' && !(phoneMode && q.status === 'Sent') && (
           <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-[13px] font-extrabold text-[#1e1b4b] m-0">Repair Quotation</h3>
+              <h3 className="text-[13px] font-extrabold text-[#1e1b4b] m-0">{phoneMode ? 'Repair Cost (agreed by phone)' : 'Repair Quotation'}</h3>
               <span className="text-[10px] font-extrabold uppercase text-slate-400">{q.status}</span>
             </div>
             {booking.diagnosis?.findings && (
@@ -202,7 +224,7 @@ const RepairTrack = () => {
               If you approve, the diagnosis fee is included. If you reject, only the diagnosis fee ({formatRupees(booking.diagnosisFee)}) is payable on return delivery.
             </p>
 
-            {booking.status === 'QUOTATION_SENT' && (
+            {booking.status === 'QUOTATION_SENT' && !phoneMode && (
               <div className="space-y-2 pt-1">
                 <input
                   type="text"

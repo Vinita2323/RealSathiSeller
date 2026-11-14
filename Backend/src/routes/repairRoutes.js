@@ -29,7 +29,9 @@ router.put('/captain/jobs/:id/reject', captainAuth, captain.rejectJob);
 router.put('/captain/jobs/:id/start-ride', captainAuth, captain.startPickupRide);
 router.put('/captain/jobs/:id/reached', captainAuth, captain.markReachedCustomer);
 router.post('/captain/jobs/:id/verify-pickup-otp', captainAuth, captain.verifyPickupOtp);
-router.put('/captain/jobs/:id/handover', captainAuth, captain.handoverAtCenter);
+router.put('/captain/jobs/:id/start-center-ride', captainAuth, captain.startRideToCenter);
+router.put('/captain/jobs/:id/reached-center', captainAuth, captain.markReachedCenter);
+router.post('/captain/jobs/:id/verify-center-otp', captainAuth, captain.verifyCenterOtp);
 router.put('/captain/jobs/:id/collect', captainAuth, captain.collectFromCenter);
 router.post('/captain/jobs/:id/verify-delivery-otp', captainAuth, captain.verifyDeliveryOtp);
 
@@ -51,6 +53,11 @@ router.put('/admin/bookings/:id/assign-pickup', adminAuth, admin.assignPickupRid
 router.put('/admin/bookings/:id/assign-delivery', adminAuth, admin.assignDeliveryRider);
 router.put('/admin/bookings/:id/assign-center', adminAuth, admin.assignCenter);
 router.put('/admin/bookings/:id/assign-technician', adminAuth, admin.assignTechnician);
+router.put('/admin/bookings/:id/start-diagnosis', adminAuth, admin.startDiagnosis);
+router.put('/admin/bookings/:id/diagnosis', adminAuth, admin.saveDiagnosis);
+router.put('/admin/bookings/:id/customer-decision', adminAuth, admin.recordCustomerDecision);
+router.put('/admin/bookings/:id/start-repair', adminAuth, admin.startRepairByAdmin);
+router.put('/admin/bookings/:id/complete-repair', adminAuth, admin.completeRepairByAdmin);
 router.put('/admin/bookings/:id/cancel', adminAuth, admin.cancelBooking);
 router.get('/admin/riders', adminAuth, admin.listRiders);
 

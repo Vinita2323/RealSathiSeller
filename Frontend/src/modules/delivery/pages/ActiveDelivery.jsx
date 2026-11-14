@@ -5,6 +5,7 @@ import DeliveryMap from '../components/DeliveryMap';
 import TransportPhotoUploader from '../components/TransportPhotoUploader';
 import { captainService, returnService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
+import repairService, { REPAIR_STATUS_LABELS } from '../../../services/repairService';
 import RatingModal from '../../../components/RatingModal';
 import { geocodeAddress, getCurrentLocation, calculateDistanceKm } from '../../../utils/geocodeUtils';
 
@@ -35,6 +36,19 @@ const RETURN_STEP_MAP = {
   IN_TRANSIT_TO_SELLER: 3,
   RECEIVED_BY_SELLER: 4,
   DELIVERED_TO_SELLER: 4,
+};
+
+const REPAIR_NEXT_ACTION = {
+  PICKUP_ASSIGNED: 'Accept or reject this pickup',
+  PICKUP_ACCEPTED: 'Start the ride to the customer',
+  PICKUP_STARTED: 'Head to the customer, then tap “I\'ve reached”',
+  REACHED_CUSTOMER: 'Ask the customer for the pickup OTP',
+  PICKED_UP: 'Start the ride to the repair center',
+  CENTER_RIDE_STARTED: 'Head to the repair center, then tap “I\'ve reached”',
+  REACHED_CENTER: 'Ask the repair center for the handover OTP',
+  DELIVERY_ASSIGNED: 'Accept or reject this delivery',
+  DELIVERY_ACCEPTED: 'Collect the device from the repair center',
+  OUT_FOR_DELIVERY: 'Deliver to the customer and enter the delivery OTP',
 };
 
 const ActiveDelivery = () => {
@@ -104,6 +118,23 @@ const ActiveDelivery = () => {
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropCoords, setDropCoords] = useState(null);
   const [captainCoords, setCaptainCoords] = useState(null);
+
+  // Repair & Services jobs (pickup / delivery) assigned to this captain — they live on /captain/repair-jobs,
+  // so they are listed here too instead of showing "No Active Mission".
+  const [repairJobs, setRepairJobs] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadRepairJobs = async () => {
+      if (document.hidden) return;
+      try {
+        const [p, d] = await Promise.all([repairService.captain.getJobs('pickups'), repairService.captain.getJobs('deliveries')]);
+        if (!cancelled) setRepairJobs([...(p?.bookings || []), ...(d?.bookings || [])]);
+      } catch { /* silent */ }
+    };
+    loadRepairJobs();
+    const t = setInterval(loadRepairJobs, 10000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
   const [loadingCoords, setLoadingCoords] = useState(false);
 
   const fetchActiveDelivery = useCallback(async () => {
@@ -731,6 +762,46 @@ const ActiveDelivery = () => {
       <div className="bg-surface min-h-screen flex flex-col items-center justify-center gap-4">
         <span className="material-symbols-outlined text-5xl text-secondary animate-spin">sync</span>
         <p className="text-sm font-semibold text-on-surface-variant">Loading active delivery…</p>
+      </div>
+    );
+  }
+
+  if (!activeItem && repairJobs.length > 0) {
+    return (
+      <div className="bg-surface min-h-screen flex flex-col gap-3 p-4 pb-28 max-w-md mx-auto">
+        <div className="pt-2">
+          <h2 className="font-bold text-lg text-primary m-0">Active Repair Jobs</h2>
+          <p className="text-xs text-on-surface-variant m-0">Repair pickups and deliveries assigned to you.</p>
+        </div>
+        {repairJobs.map((job) => {
+          const addr = job.pickupAddress || {};
+          return (
+            <div key={job._id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-extrabold text-sm text-slate-900 m-0 truncate">{job.brand} {job.model}</p>
+                  <p className="text-[11px] font-semibold text-slate-400 m-0">{job.categoryName} · #{job.bookingId}</p>
+                </div>
+                <span className="shrink-0 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border border-orange-200 bg-orange-50 text-[#ea580c]">
+                  {REPAIR_STATUS_LABELS[job.status] || job.status}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 m-0">
+                {[addr.addressLine1, addr.city, addr.pincode].filter(Boolean).join(', ')}
+              </p>
+              {REPAIR_NEXT_ACTION[job.status] && (
+                <p className="text-xs font-bold text-[#15803d] m-0">Next: {REPAIR_NEXT_ACTION[job.status]}</p>
+              )}
+            </div>
+          );
+        })}
+        <button
+          onClick={() => navigate('/captain/repair-jobs')}
+          className="mt-1 px-6 py-3.5 bg-[#366b00] text-white font-bold text-sm rounded-2xl shadow-md cursor-pointer border-none"
+        >
+          Open Repair Jobs
+        </button>
+        <CaptainBottomNav />
       </div>
     );
   }

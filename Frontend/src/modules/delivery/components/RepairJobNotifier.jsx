@@ -141,12 +141,12 @@ const RepairJobNotifier = () => {
         <div className="p-4 space-y-3 text-xs">
           <div>
             <p className="text-sm font-extrabold text-slate-900 m-0">{offer.brand} {offer.model}</p>
-            <p className="text-slate-500 m-0">{offer.categoryName} · {offer.problem}</p>
+            <p className="text-slate-500 m-0">{offer.categoryName} · {offer.problem}{offer.subProblem ? ` → ${offer.subProblem}` : ""}</p>
           </div>
 
           <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
-            {isDelivery && offer.repairCenter && (
-              <p className="m-0 flex items-start gap-1.5 text-slate-700 font-semibold"><Building2 size={13} className="mt-0.5 shrink-0" /> Collect from: {offer.repairCenter.name}{offer.repairCenter.address ? `, ${offer.repairCenter.address}` : ''}</p>
+            {isDelivery && (offer.dropLocation || offer.repairCenter) && (
+              <p className="m-0 flex items-start gap-1.5 text-slate-700 font-semibold"><Building2 size={13} className="mt-0.5 shrink-0" /> Collect from: {(offer.dropLocation?.source === 'admin' ? 'Admin' : (offer.dropLocation || offer.repairCenter).name)} — {offer.dropLocation?.fullAddress || offer.repairCenter?.address}</p>
             )}
             <p className="m-0 flex items-start gap-1.5 text-slate-700"><MapPin size={13} className="mt-0.5 shrink-0" /> {isDelivery ? 'Deliver to: ' : 'Pick up from: '}{customerAddress || '—'}</p>
             {addr.phone && <p className="m-0 flex items-center gap-1.5 text-slate-600"><Phone size={13} /> {addr.fullName || 'Customer'} · {addr.phone}</p>}

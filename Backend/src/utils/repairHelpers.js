@@ -10,6 +10,8 @@ export const REPAIR_STATUSES = [
   'PICKUP_STARTED',
   'REACHED_CUSTOMER',
   'PICKED_UP',
+  'CENTER_RIDE_STARTED',
+  'REACHED_CENTER',
   'AT_REPAIR_CENTER',
   'DIAGNOSING',
   'QUOTATION_SENT',
@@ -31,11 +33,13 @@ export const REPAIR_STATUS_LABELS = {
   PICKUP_STARTED: 'Rider On The Way',
   REACHED_CUSTOMER: 'Rider Reached You',
   PICKED_UP: 'Picked Up',
+  CENTER_RIDE_STARTED: 'On The Way To Repair Center',
+  REACHED_CENTER: 'Reached Repair Center',
   AT_REPAIR_CENTER: 'At Repair Center',
   DIAGNOSING: 'Diagnosis In Progress',
-  QUOTATION_SENT: 'Quotation Ready',
-  QUOTATION_APPROVED: 'Quotation Approved',
-  QUOTATION_REJECTED: 'Quotation Rejected',
+  QUOTATION_SENT: 'Diagnosis Done',
+  QUOTATION_APPROVED: 'Repair Approved',
+  QUOTATION_REJECTED: 'Repair Declined',
   IN_REPAIR: 'Repair In Progress',
   REPAIR_COMPLETED: 'Repair Completed',
   DELIVERY_ASSIGNED: 'Delivery Rider Assigned',
@@ -48,7 +52,7 @@ export const REPAIR_STATUS_LABELS = {
 // Statuses in which a customer may still cancel (before the item leaves their hands)
 export const CUSTOMER_CANCELLABLE = ['REQUESTED', 'PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED'];
 export const ADMIN_CANCELLABLE = [
-  'REQUESTED', 'PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP', 'AT_REPAIR_CENTER',
+  'REQUESTED', 'PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER', 'PICKED_UP', 'CENTER_RIDE_STARTED', 'REACHED_CENTER', 'AT_REPAIR_CENTER',
   'DIAGNOSING', 'QUOTATION_SENT',
 ];
 export const FINAL_STATUSES = ['DELIVERED', 'CANCELLED'];
@@ -72,6 +76,7 @@ export const sanitizeForStaff = (bookingDoc) => {
   const b = bookingDoc?.toObject ? bookingDoc.toObject() : { ...bookingDoc };
   delete b.pickupOtp;
   delete b.deliveryOtp;
+  delete b.centerOtp; // only the admin / repair center knows the handover OTP
   return b;
 };
 
@@ -82,6 +87,7 @@ export const sanitizeForCustomer = (bookingDoc) => {
   // delivery OTP from repair completion until delivery (it is the customer's secret to share with the rider).
   const showPickupOtp = ['REQUESTED', 'PICKUP_ASSIGNED', 'PICKUP_ACCEPTED', 'PICKUP_STARTED', 'REACHED_CUSTOMER'].includes(b.status);
   const showDeliveryOtp = ['REPAIR_COMPLETED', 'QUOTATION_REJECTED', 'DELIVERY_ASSIGNED', 'DELIVERY_ACCEPTED', 'OUT_FOR_DELIVERY'].includes(b.status);
+  delete b.centerOtp;
   if (!showPickupOtp) delete b.pickupOtp;
   if (!showDeliveryOtp) delete b.deliveryOtp;
   return b;
@@ -110,13 +116,13 @@ export const notifyCustomer = (booking, title, body) => {
   });
 };
 
-export const notifyCaptain = (captainId, booking, title, message) => {
+export const notifyCaptain = (captainId, booking, title, message, type = 'JOB_ASSIGNED') => {
   setImmediate(async () => {
     try {
       const { default: CaptainNotification } = await import('../models/CaptainNotification.model.js');
       await CaptainNotification.create({
         captainId,
-        type: 'JOB_ASSIGNED',
+        type,
         title,
         message,
         orderId: booking.bookingId,
@@ -131,6 +137,18 @@ export const notifyCaptain = (captainId, booking, title, message) => {
         data: { type: 'repair_job', bookingId: booking.bookingId, link: '/captain/repair-jobs' },
       });
     } catch { /* push not configured */ }
+  });
+};
+
+// Tell the riders currently attached to a booking (pickup and/or delivery) that it was cancelled.
+// Works whether the captain fields are populated documents or plain ObjectIds.
+export const notifyAssignedCaptainsCancelled = (booking, reason = '') => {
+  const idOf = (v) => String(v?._id || v || '');
+  const ids = new Set();
+  if (booking.pickupCaptainId && ['Assigned', 'Accepted'].includes(booking.pickupCaptainStatus)) ids.add(idOf(booking.pickupCaptainId));
+  if (booking.deliveryCaptainId && ['Assigned', 'Accepted'].includes(booking.deliveryCaptainStatus)) ids.add(idOf(booking.deliveryCaptainId));
+  ids.forEach((id) => {
+    if (id) notifyCaptain(id, booking, 'Repair job cancelled', `Job ${booking.bookingId} was cancelled.${reason ? ` ${reason}` : ''}`, 'JOB_CANCELLED');
   });
 };
 

@@ -2,13 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import IncomingGigModal from './IncomingGigModal';
 import { captainService } from '../../../services/authService';
-import { transportService } from '../../../services/transportService';
 import { markJobAsDismissed, isJobDismissed } from '../utils/jobDismissal';
 
 /**
  * CaptainOrderNotifier
  * Global background listener for Delivery Captains.
- * Polls for newly assigned delivery jobs/orders and transport requests across ANY captain page.
+ * Polls for newly assigned delivery jobs/orders across ANY captain page.
  * When a new order/delivery arrives, triggers ringing with /DeliveryAppRing.mpeg and pops up IncomingGigModal.
  */
 const CaptainOrderNotifier = () => {
@@ -37,14 +36,6 @@ const CaptainOrderNotifier = () => {
       const res = await captainService.getDashboardStats();
       if (res && res.success) {
         const orders = res.pendingOrders || [];
-        const tRequests = res.transportRequests || [];
-
-        // Check for new transport requests
-        const newTransport = tRequests.find((t) => !isJobDismissed(t));
-        if (newTransport && (!incomingJob || incomingJob._id !== newTransport._id)) {
-          setIncomingJob({ ...newTransport, isTransport: true });
-          return;
-        }
 
         // Check for newly assigned e-commerce orders
         const newAssignedOrder = orders.find(
@@ -57,9 +48,7 @@ const CaptainOrderNotifier = () => {
 
         // If active incoming job is no longer pending/assigned
         if (incomingJob) {
-          const stillActive = incomingJob.isTransport
-            ? tRequests.some((t) => (t._id === incomingJob._id || t.bookingId === incomingJob.bookingId))
-            : orders.some((o) => (o._id === incomingJob._id || o.orderId === incomingJob.orderId) && o.captainStatus === 'Assigned');
+          const stillActive = orders.some((o) => (o._id === incomingJob._id || o.orderId === incomingJob.orderId) && o.captainStatus === 'Assigned');
           if (!stillActive) {
             setIncomingJob(null);
           }
@@ -81,19 +70,10 @@ const CaptainOrderNotifier = () => {
     setActionLoading(true);
     try {
       markJobAsDismissed(job);
-      if (job.isTransport) {
-        const bookingId = job.bookingId || job._id;
-        await transportService.captainAcceptRequest(bookingId);
-      } else {
-        const orderId = job.orderId || job._id;
-        await captainService.acceptJob(orderId);
-      }
+      const orderId = job.orderId || job._id;
+      await captainService.acceptJob(orderId);
       setIncomingJob(null);
-      if (job.isTransport) {
-        navigate(`/captain/active-delivery?type=transport&bookingId=${job.bookingId || job._id}`);
-      } else {
-        navigate(`/captain/active-delivery?type=order&orderId=${job.orderId || job._id}`);
-      }
+      navigate(`/captain/active-delivery?type=order&orderId=${job.orderId || job._id}`);
     } catch (err) {
       console.error('Accept job error:', err);
       alert(err?.response?.data?.message || err?.message || 'Failed to accept delivery.');
@@ -109,11 +89,7 @@ const CaptainOrderNotifier = () => {
     setActionLoading(true);
     try {
       const id = job.bookingId || job.orderId || job._id;
-      if (job.isTransport) {
-        await transportService.captainRejectRequest(id);
-      } else {
-        await captainService.rejectJob(id);
-      }
+      await captainService.rejectJob(id);
     } catch (err) {
       console.error('Reject job error:', err);
     } finally {

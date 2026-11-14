@@ -9361,6 +9361,37 @@ export const AdminProfile = () => {
 
   const [profile, setProfile] = useState(getInitialProfile);
 
+  // Admin drop-off address: drivers deliver repair parcels here
+  const emptyAddress = { addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', pincode: '', lat: null, lng: null };
+  const [address, setAddress] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('sathiseller_admin_data') || 'null');
+      return { ...emptyAddress, ...(stored?.address || {}) };
+    } catch (e) { return emptyAddress; }
+  });
+  const [pinning, setPinning] = useState(false);
+  const hasAddress = Boolean(address.addressLine1 || address.city);
+  const addressLine = [address.addressLine1, address.addressLine2, address.landmark, address.city, address.state, address.pincode].filter(Boolean).join(', ');
+
+  const pinCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setStatusMessage({ type: 'error', text: 'This browser cannot share your location.' });
+      return;
+    }
+    setPinning(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setAddress((prev) => ({ ...prev, lat: Number(pos.coords.latitude.toFixed(6)), lng: Number(pos.coords.longitude.toFixed(6)) }));
+        setPinning(false);
+      },
+      () => {
+        setStatusMessage({ type: 'error', text: 'Could not read your location. Allow location access and try again.' });
+        setPinning(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   // Fetch persisted admin profile from backend on mount
   useEffect(() => {
     let isMounted = true;
@@ -9370,6 +9401,7 @@ export const AdminProfile = () => {
         const res = await adminService.getProfile();
         if (isMounted && res && res.admin) {
           const adm = res.admin;
+          setAddress({ ...emptyAddress, ...(adm.address || {}) });
           const nameParts = (adm.name || '').split(' ');
           setProfile(prev => ({
             ...prev,
@@ -9416,6 +9448,7 @@ export const AdminProfile = () => {
         name: `${profile.firstName.trim()} ${profile.lastName.trim()}`.trim() || 'Administrator',
         email: profile.email.trim(),
         mobile: profile.mobile.trim(),
+        address,
       };
 
       if (profile.password) {
@@ -9425,6 +9458,7 @@ export const AdminProfile = () => {
       const res = await adminService.updateProfile(payload);
       if (res && res.success) {
         const updated = res.admin || payload;
+        if (res.admin?.address) setAddress({ ...emptyAddress, ...res.admin.address });
         const nameParts = (updated.name || '').split(' ');
         setProfile(prev => ({
           ...prev,
@@ -9580,6 +9614,52 @@ export const AdminProfile = () => {
                 />
               </div>
 
+              {/* Admin address — drop-off location for drivers */}
+              <div className="sm:col-span-2 border border-orange-200/70 bg-[#fff8f3] rounded-2xl p-4 space-y-3">
+                <div>
+                  <h4 className="text-xs font-extrabold text-slate-800 m-0">Admin Address (parcel drop-off location)</h4>
+                  <p className="text-[11px] text-slate-500 m-0 mt-0.5">Captains and delivery drivers see this address as the place to drop repair parcels.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Address line 1</label>
+                    <input type="text" maxLength={200} value={address.addressLine1} onChange={(e) => setAddress({ ...address, addressLine1: e.target.value })} placeholder="Shop / building, street" className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Address line 2 <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input type="text" maxLength={200} value={address.addressLine2} onChange={(e) => setAddress({ ...address, addressLine2: e.target.value })} placeholder="Area, locality" className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Landmark <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input type="text" maxLength={200} value={address.landmark} onChange={(e) => setAddress({ ...address, landmark: e.target.value })} placeholder="Near…" className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">City</label>
+                    <input type="text" maxLength={80} value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} placeholder="e.g. Indore" className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">State</label>
+                    <input type="text" maxLength={80} value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} placeholder="e.g. Madhya Pradesh" className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">Pincode</label>
+                    <input type="text" inputMode="numeric" maxLength={6} value={address.pincode} onChange={(e) => setAddress({ ...address, pincode: e.target.value.replace(/\D/g, '') })} placeholder="6 digits" className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] transition-colors" />
+                  </div>
+                  <div className="flex items-end gap-2 flex-wrap">
+                    <button type="button" onClick={pinCurrentLocation} disabled={pinning} className="px-3.5 py-2.5 bg-white border border-slate-200 hover:border-[#ff5500] text-slate-700 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-60">
+                      {pinning ? 'Reading location…' : 'Pin my current location'}
+                    </button>
+                    {address.lat !== null && address.lng !== null && (
+                      <>
+                        <span className="text-[11px] font-semibold text-emerald-700 pb-2.5">Map pin saved ✓ ({address.lat}, {address.lng})</span>
+                        <button type="button" onClick={() => setAddress({ ...address, lat: null, lng: null })} className="text-[11px] font-bold text-rose-600 bg-transparent border-none cursor-pointer pb-2.5 underline">Remove pin</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 m-0">Tip: stand at the drop-off place and press “Pin my current location” so drivers get exact navigation. Leave every field empty to clear the address.</p>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">New Password <span className="text-slate-400 font-normal">(Leave blank to keep current)</span></label>
                 <input
@@ -9651,6 +9731,17 @@ export const AdminProfile = () => {
             <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
               <span className="text-slate-500 font-medium block mb-1">Account Created At</span>
               <span className="text-slate-800 font-bold text-sm">{profile.createdAt}</span>
+            </div>
+            <div className="sm:col-span-2 p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">Admin Address <span className="text-slate-400 font-normal">(parcel drop-off location for drivers)</span></span>
+              {hasAddress ? (
+                <>
+                  <span className="text-slate-800 font-bold text-sm block">{addressLine}</span>
+                  {address.lat !== null && address.lng !== null && <span className="text-[11px] font-semibold text-emerald-700">Map pin saved ✓</span>}
+                </>
+              ) : (
+                <span className="text-amber-700 font-semibold text-sm">Not set yet — click “Edit Profile” to add the address drivers should deliver parcels to.</span>
+              )}
             </div>
           </div>
         )}

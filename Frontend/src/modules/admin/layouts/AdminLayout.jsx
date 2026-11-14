@@ -69,6 +69,7 @@ const RepairBookingsAdmin = lazy(() => import('../pages/RepairAdminPages').then(
 const RepairTechniciansAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairTechniciansAdmin })));
 const RepairCentersAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairCentersAdmin })));
 const RepairPricingAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairPricingAdmin })));
+const RepairProblemsAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairProblemsAdmin })));
 const RepairDriversAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairDriversAdmin })));
 const RepairPageContentAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairPageContentAdmin })));
 const RepairReportsAdmin = lazy(() => import('../pages/RepairAdminPages').then(m => ({ default: m.RepairReportsAdmin })));
@@ -259,6 +260,8 @@ export const AdminLayout = () => {
         return <RepairCentersAdmin />;
       case 'repair_pricing':
         return <RepairPricingAdmin />;
+      case 'repair_problems':
+        return <RepairProblemsAdmin />;
       case 'repair_drivers':
         return <RepairDriversAdmin />;
       case 'repair_content':

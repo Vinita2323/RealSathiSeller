@@ -51,7 +51,7 @@ const RepairHome = () => {
         <span className="text-[13px] font-extrabold text-[#1e1b4b] truncate">
           {b.brand} {b.model} · {b.categoryName}
         </span>
-        <span className="text-[11px] font-medium text-slate-500 truncate">{b.problem}</span>
+        <span className="text-[11px] font-medium text-slate-500 truncate">{b.problem}{b.subProblem ? ` → ${b.subProblem}` : ""}</span>
         <div className="flex items-center gap-2 flex-wrap">
           <RepairStatusChip status={b.status} />
           <span className="text-[10px] font-semibold text-slate-400">#{b.bookingId} · {formatDateTime(b.createdAt)}</span>

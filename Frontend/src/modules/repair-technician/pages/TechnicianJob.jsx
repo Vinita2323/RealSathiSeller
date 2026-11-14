@@ -103,7 +103,7 @@ const TechnicianJob = () => {
             <p className="text-[12px] font-bold text-slate-500 m-0">{job.categoryName}</p>
             <RepairStatusChip status={job.status} />
           </div>
-          <p className="text-[13px] font-extrabold text-[#1e1b4b] m-0">{job.problem}</p>
+          <p className="text-[13px] font-extrabold text-[#1e1b4b] m-0">{job.problem}{job.subProblem ? ` → ${job.subProblem}` : ""}</p>
           {job.description && <p className="text-[12px] text-slate-600 m-0">{job.description}</p>}
           {job.photos?.length > 0 && (
             <div className="flex gap-2 flex-wrap">

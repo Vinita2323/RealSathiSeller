@@ -6,7 +6,16 @@ import { addressService } from '../../../../services/authService';
 import { RepairCategoryIcon, RepairPageHeader, formatRupees } from '../../../../components/repair/RepairUi';
 
 const TIME_SLOTS = ['09:00 AM - 11:00 AM', '11:00 AM - 01:00 PM', '01:00 PM - 03:00 PM', '03:00 PM - 05:00 PM', '05:00 PM - 07:00 PM'];
-const STEP_TITLES = ['Select item', 'Brand & model', 'Select problem', 'Describe & photos', 'Pickup address', 'Pickup date & time', 'Confirm booking'];
+const STEP_META = {
+  category: 'Select item',
+  brand: 'Brand & model',
+  problem: 'Select problem',
+  sub: 'Select issue detail',
+  describe: 'Describe & photos',
+  address: 'Pickup address',
+  slot: 'Pickup date & time',
+  confirm: 'Confirm booking',
+};
 
 const pad = (n) => String(n).padStart(2, '0');
 const toIsoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -45,6 +54,7 @@ const RepairBook = () => {
     brand: '',
     model: '',
     problem: '',
+    subProblem: '',
     description: '',
     photos: [],
     addressId: '',
@@ -88,15 +98,25 @@ const RepairBook = () => {
   const address = useMemo(() => addresses.find((a) => a._id === form.addressId), [addresses, form.addressId]);
   const days = useMemo(() => next7Days(), []);
 
+  // The 'issue detail' page only exists when the chosen problem has sub-problems
+  const problemObj = useMemo(() => category?.problems?.find((p) => p.name === form.problem), [category, form.problem]);
+  const subOptions = problemObj?.subProblems || [];
+  const steps = useMemo(
+    () => ['category', 'brand', 'problem', ...(subOptions.length > 0 ? ['sub'] : []), 'describe', 'address', 'slot', 'confirm'],
+    [subOptions.length]
+  );
+  const stepKey = steps[Math.min(step, steps.length - 1)];
+
   const validate = () => {
-    if (step === 0 && !form.categoryId) return 'Please select what you want to repair.';
-    if (step === 1 && (!form.brand.trim() || !form.model.trim())) {
+    if (stepKey === 'category' && !form.categoryId) return 'Please select what you want to repair.';
+    if (stepKey === 'brand' && (!form.brand.trim() || !form.model.trim())) {
       return otherBrand ? 'Please enter the brand name and model.' : 'Please select brand and model.';
     }
-    if (step === 2 && !form.problem) return 'Please select the problem.';
-    if (step === 3 && !form.description.trim()) return 'Please describe the issue.';
-    if (step === 4 && !address) return 'Please select a pickup address.';
-    if (step === 5 && (!form.date || !form.timeSlot)) return 'Please select pickup date and time.';
+    if (stepKey === 'problem' && !form.problem) return 'Please select the problem.';
+    if (stepKey === 'sub' && !form.subProblem) return 'Please select the issue detail.';
+    if (stepKey === 'describe' && !form.description.trim()) return 'Please describe the issue.';
+    if (stepKey === 'address' && !address) return 'Please select a pickup address.';
+    if (stepKey === 'slot' && (!form.date || !form.timeSlot)) return 'Please select pickup date and time.';
     return '';
   };
 
@@ -104,7 +124,7 @@ const RepairBook = () => {
     const msg = validate();
     if (msg) { setError(msg); return; }
     setError('');
-    setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
+    setStep((s) => Math.min(s + 1, steps.length - 1));
   };
   const goBack = () => {
     setError('');
@@ -143,6 +163,7 @@ const RepairBook = () => {
         brand: form.brand,
         model: form.model,
         problem: form.problem,
+        subProblem: form.subProblem,
         description: form.description,
         photos: form.photos,
         pickupDate: form.date,
@@ -172,19 +193,19 @@ const RepairBook = () => {
     `w-full text-left px-3.5 py-3 rounded-xl border text-[13px] font-bold cursor-pointer transition-colors ${
       selected ? 'border-[#ff5500] bg-orange-50 text-[#ea580c]' : 'border-slate-100 bg-white text-[#1e1b4b]'
     }`;
-  const isLast = step === STEP_TITLES.length - 1;
+  const isLast = stepKey === 'confirm';
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-28 font-sans w-full max-w-[480px] md:max-w-3xl mx-auto">
-      <RepairPageHeader title="Book a Repair" subtitle={`Step ${step + 1} of ${STEP_TITLES.length} · ${STEP_TITLES[step]}`} onBack={goBack} />
+      <RepairPageHeader title="Book a Repair" subtitle={`Step ${step + 1} of ${steps.length} · ${STEP_META[stepKey]}`} onBack={goBack} />
       <div className="h-1 bg-slate-100">
-        <div className="h-1 bg-[#ff5500] transition-all" style={{ width: `${((step + 1) / STEP_TITLES.length) * 100}%` }} />
+        <div className="h-1 bg-[#ff5500] transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
       </div>
 
       <div className="px-4 pt-4 space-y-3">
         {loading && <p className="text-[12px] text-slate-400">Loading…</p>}
 
-        {!loading && step === 0 && (
+        {!loading && stepKey === 'category' && (
           <div className="grid grid-cols-2 gap-3">
             {categories.map((c) => (
               <button
@@ -204,7 +225,7 @@ const RepairBook = () => {
           </div>
         )}
 
-        {!loading && step === 1 && category && (
+        {!loading && stepKey === 'brand' && category && (
           <>
             <p className="text-[12px] font-bold text-slate-500 m-0">Brand</p>
             <div className="space-y-2">
@@ -259,12 +280,12 @@ const RepairBook = () => {
           </>
         )}
 
-        {!loading && step === 2 && category && (
+        {!loading && stepKey === 'problem' && category && (
           <div className="space-y-2">
             {category.problems.map((p) => (
-              <button key={p.name} type="button" className={optionCls(form.problem === p.name)} onClick={() => set({ problem: p.name })}>
+              <button key={p.name} type="button" className={optionCls(form.problem === p.name)} onClick={() => set({ problem: p.name, subProblem: '' })}>
                 <div className="flex justify-between gap-2">
-                  <span>{p.name}</span>
+                  <span>{p.name}{p.subProblems?.length > 0 && <span className="ml-1.5 text-[10px] font-semibold text-[#ea580c]">{p.subProblems.length} options ›</span>}</span>
                   {p.estimateMax > 0 && (
                     <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">
                       Est. {formatRupees(p.estimateMin)} – {formatRupees(p.estimateMax)}
@@ -279,7 +300,28 @@ const RepairBook = () => {
           </div>
         )}
 
-        {!loading && step === 3 && (
+        {!loading && stepKey === 'sub' && (
+          <div className="space-y-2">
+            <p className="text-[12px] font-bold text-slate-500 m-0">What exactly is wrong with “{form.problem}”?</p>
+            {subOptions.map((sp) => (
+              <button key={sp.name} type="button" className={optionCls(form.subProblem === sp.name)} onClick={() => set({ subProblem: sp.name })}>
+                <div className="flex justify-between gap-2">
+                  <span>{sp.name}</span>
+                  {sp.estimateMax > 0 && (
+                    <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">
+                      Est. {formatRupees(sp.estimateMin)} – {formatRupees(sp.estimateMax)}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+            <p className="text-[10px] text-slate-400 m-0 pt-1">
+              Estimates are indicative only. You will get a final quotation after diagnosis and pay only if you approve it.
+            </p>
+          </div>
+        )}
+
+        {!loading && stepKey === 'describe' && (
           <>
             <textarea
               rows={4}
@@ -319,7 +361,7 @@ const RepairBook = () => {
           </>
         )}
 
-        {!loading && step === 4 && (
+        {!loading && stepKey === 'address' && (
           <>
             {addresses.length === 0 && (
               <p className="text-[12px] text-slate-500 m-0">You have no saved address yet. Add one to continue.</p>
@@ -350,7 +392,7 @@ const RepairBook = () => {
           </>
         )}
 
-        {!loading && step === 5 && (
+        {!loading && stepKey === 'slot' && (
           <>
             <p className="text-[12px] font-bold text-slate-500 m-0">Pickup date</p>
             <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
@@ -379,11 +421,11 @@ const RepairBook = () => {
           </>
         )}
 
-        {!loading && step === 6 && category && (
+        {!loading && stepKey === 'confirm' && category && (
           <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2.5 text-[12px]">
             {[
               ['Item', `${category.name} — ${form.brand} ${form.model}`],
-              ['Problem', form.problem],
+              ['Problem', form.subProblem ? `${form.problem} → ${form.subProblem}` : form.problem],
               ['Details', form.description],
               ['Pickup', address ? [address.addressLine1, address.city, address.pincode].filter(Boolean).join(', ') : ''],
               ['When', `${new Date(`${form.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}, ${form.timeSlot}`],

@@ -178,6 +178,7 @@ export const AdminSidebar = () => {
           submenu: [
             { id: 'repair_bookings', label: 'Repair Bookings' },
             { id: 'repair_pricing', label: 'Repair Categories' },
+            { id: 'repair_problems', label: 'Problems & Pricing' },
             { id: 'repair_content', label: 'Page Content' },
             { id: 'repair_drivers', label: 'Add Driver' },
           ]

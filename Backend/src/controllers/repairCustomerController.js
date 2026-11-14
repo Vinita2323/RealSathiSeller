@@ -10,6 +10,7 @@ import {
   pushHistory,
   sanitizeForCustomer,
   notifyCustomer,
+  notifyAssignedCaptainsCancelled,
 } from '../utils/repairHelpers.js';
 
 // Seed the default catalog exactly once. Afterwards admin deletions stay deleted.
@@ -51,7 +52,7 @@ const isValidSlotDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''
 export const createBooking = async (req, res, next) => {
   try {
     const {
-      categoryId, brand, model, problem, description,
+      categoryId, brand, model, problem, subProblem, description,
       photos, pickupAddress, pickupDate, pickupTimeSlot,
     } = req.body;
 
@@ -67,6 +68,19 @@ export const createBooking = async (req, res, next) => {
     }
     if (!String(problem || '').trim()) {
       return res.status(400).json({ success: false, message: 'Please select the problem.' });
+    }
+    // If the chosen problem has sub-problems, the customer must have picked one of them
+    const chosenProblem = (category.problems || []).find((p) => p.name === String(problem).trim());
+    const subOptions = chosenProblem?.subProblems || [];
+    let chosenSub = '';
+    if (subOptions.length > 0) {
+      chosenSub = String(subProblem || '').trim();
+      if (!chosenSub) {
+        return res.status(400).json({ success: false, message: 'Please select the issue detail for this problem.' });
+      }
+      if (!subOptions.some((s) => s.name === chosenSub)) {
+        return res.status(400).json({ success: false, message: 'The selected issue detail is not available for this problem.' });
+      }
     }
     if (!String(description || '').trim()) {
       return res.status(400).json({ success: false, message: 'Please describe the issue.' });
@@ -94,6 +108,7 @@ export const createBooking = async (req, res, next) => {
       brand: String(brand).trim(),
       model: String(model).trim(),
       problem: String(problem).trim(),
+      subProblem: chosenSub,
       description: String(description).trim(),
       photos: cleanPhotos,
       pickupAddress: {
@@ -111,6 +126,7 @@ export const createBooking = async (req, res, next) => {
       pickupSlot: { date: pickupDate, timeSlot: String(pickupTimeSlot).trim() },
       pickupOtp: generateRepairOtp(),
       deliveryOtp: generateRepairOtp(),
+      centerOtp: generateRepairOtp(),
       diagnosisFee: category.diagnosisFee || 0,
     });
     pushHistory(booking, 'REQUESTED', { note: 'Repair booked by customer', byRole: 'customer', by: req.user.id });
@@ -171,6 +187,9 @@ export const respondToQuotation = async (req, res, next) => {
     if (booking.status !== 'QUOTATION_SENT' || booking.quotation.status !== 'Sent') {
       return res.status(400).json({ success: false, message: 'There is no quotation waiting for your approval.' });
     }
+    if (booking.decisionMode === 'phone') {
+      return res.status(400).json({ success: false, message: 'Our team will confirm this with you by phone.' });
+    }
 
     booking.quotation.respondedAt = new Date();
     booking.quotation.customerNote = String(req.body.note || '').slice(0, 500);
@@ -209,6 +228,7 @@ export const cancelMyBooking = async (req, res, next) => {
     }
     booking.cancelReason = String(req.body.reason || 'Cancelled by customer').slice(0, 300);
     booking.cancelledBy = 'customer';
+    notifyAssignedCaptainsCancelled(booking, 'The customer cancelled the repair.'); // before rider status is cleared
     booking.pickupCaptainStatus = '';
     pushHistory(booking, 'CANCELLED', { note: booking.cancelReason, byRole: 'customer', by: req.user.id });
     await booking.save();

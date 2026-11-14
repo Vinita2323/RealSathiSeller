@@ -21,6 +21,16 @@ const buildAdminPayload = (admin) => {
     lastName,
     email: admin.email,
     mobile: admin.mobile || '',
+    address: {
+      addressLine1: admin.address?.addressLine1 || '',
+      addressLine2: admin.address?.addressLine2 || '',
+      landmark: admin.address?.landmark || '',
+      city: admin.address?.city || '',
+      state: admin.address?.state || '',
+      pincode: admin.address?.pincode || '',
+      lat: admin.address?.lat ?? null,
+      lng: admin.address?.lng ?? null,
+    },
     role: admin.role,
     createdAt: admin.createdAt,
   };
@@ -142,7 +152,35 @@ export const updateAdminProfile = async (req, res, next) => {
       });
     }
 
-    const { firstName, lastName, name, email, mobile, password, newPassword } = req.body;
+    const { firstName, lastName, name, email, mobile, password, newPassword, address } = req.body;
+
+    if (address !== undefined) {
+      const a = address || {};
+      const clean = (v, max = 200) => String(v ?? '').trim().slice(0, max);
+      const num = (v, lo, hi) => {
+        if (v === '' || v === null || v === undefined) return null;
+        const n = Number(v);
+        return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
+      };
+      const next = {
+        addressLine1: clean(a.addressLine1),
+        addressLine2: clean(a.addressLine2),
+        landmark: clean(a.landmark),
+        city: clean(a.city, 80),
+        state: clean(a.state, 80),
+        pincode: clean(a.pincode, 10),
+        lat: num(a.lat, -90, 90),
+        lng: num(a.lng, -180, 180),
+      };
+      const anyText = [next.addressLine1, next.addressLine2, next.landmark, next.city, next.state, next.pincode].some(Boolean);
+      if (anyText && (!next.addressLine1 || !next.city)) {
+        return res.status(400).json({ success: false, message: 'Please enter the address line and city, or clear the whole address.' });
+      }
+      if (next.pincode && !/^[0-9]{6}$/.test(next.pincode)) {
+        return res.status(400).json({ success: false, message: 'Pincode must be 6 digits.' });
+      }
+      admin.address = next;
+    }
 
     if (firstName !== undefined) admin.firstName = String(firstName).trim();
     if (lastName !== undefined) admin.lastName = String(lastName).trim();

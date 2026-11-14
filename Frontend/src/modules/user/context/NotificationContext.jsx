@@ -1,7 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { authService } from '../../../services/authService';
 import { connectUserSocket, disconnectUserSocket } from '../../../services/userSocket';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
+
+// Customer notifications belong to the customer app only. On the admin / captain / seller / technician panels the shared
+// request code sends THAT panel's token, which the customer endpoint rejects (403), so nothing is fetched there.
+const NON_CUSTOMER_AREA = /^\/(admin|super-admin|captain|seller|technician)(\/|$)/;
 
 const NotificationContext = createContext({
   notifications: [],
@@ -15,6 +20,8 @@ const NotificationContext = createContext({
 
 export const NotificationProvider = ({ children }) => {
   const { isRoleAuthenticated, userRole } = useAuth();
+  const { pathname } = useLocation();
+  const isCustomerArea = !NON_CUSTOMER_AREA.test(pathname);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -30,6 +37,7 @@ export const NotificationProvider = ({ children }) => {
       setUnreadCount(0);
       return;
     }
+    if (NON_CUSTOMER_AREA.test(window.location.pathname)) return;
     try {
       setLoading(true);
       const res = await authService.getUserNotifications();
@@ -86,7 +94,7 @@ export const NotificationProvider = ({ children }) => {
   // Initial fetch + Socket.IO realtime
   useEffect(() => {
     const token = localStorage.getItem('sathiseller_user_token');
-    if (!token || !isUserLoggedIn) {
+    if (!token || !isUserLoggedIn || !isCustomerArea) {
       disconnectUserSocket();
       setNotifications([]);
       setUnreadCount(0);
@@ -107,7 +115,7 @@ export const NotificationProvider = ({ children }) => {
     return () => {
       socket?.off('user:notification', onNotification);
     };
-  }, [isUserLoggedIn, userRole, refreshNotifications, prependNotification]);
+  }, [isUserLoggedIn, isCustomerArea, userRole, refreshNotifications, prependNotification]);
 
   // Disconnect on logout
   useEffect(() => {

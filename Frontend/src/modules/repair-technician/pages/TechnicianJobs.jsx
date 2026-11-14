@@ -82,7 +82,7 @@ const TechnicianJobs = () => {
             >
               <div className="min-w-0 space-y-1">
                 <p className="text-[13px] font-extrabold text-[#1e1b4b] m-0 truncate">{j.brand} {j.model} · {j.categoryName}</p>
-                <p className="text-[11px] text-slate-500 m-0 truncate">{j.problem}</p>
+                <p className="text-[11px] text-slate-500 m-0 truncate">{j.problem}{j.subProblem ? ` → ${j.subProblem}` : ""}</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <RepairStatusChip status={j.status} />
                   <span className="text-[10px] font-semibold text-slate-400">#{j.bookingId} · {formatDateTime(j.updatedAt)}</span>

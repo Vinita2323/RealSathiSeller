@@ -49,6 +49,7 @@ const repairBookingSchema = new mongoose.Schema(
     brand: { type: String, trim: true, default: '' },
     model: { type: String, trim: true, default: '' },
     problem: { type: String, trim: true, required: true },
+    subProblem: { type: String, trim: true, default: '' },
     description: { type: String, trim: true, default: '' },
     photos: { type: [String], default: [] },
 
@@ -65,6 +66,9 @@ const repairBookingSchema = new mongoose.Schema(
     // OTPs (generated at booking, never exposed to captain / technician)
     pickupOtp: { type: String, default: '' },
     deliveryOtp: { type: String, default: '' },
+    // Repair-center handover OTP: known to admin / center staff, entered by the rider on arrival
+    centerOtp: { type: String, default: '' },
+    centerOtpVerified: { type: Boolean, default: false },
     pickupOtpVerified: { type: Boolean, default: false },
     deliveryOtpVerified: { type: Boolean, default: false },
 
@@ -97,6 +101,8 @@ const repairBookingSchema = new mongoose.Schema(
       customerNote: { type: String, default: '' },
     },
     repairNotes: { type: String, default: '' },
+    // 'phone' = admin recorded the diagnosis and takes the customer's decision by phone; 'app' = customer approves in the app
+    decisionMode: { type: String, enum: ['app', 'phone'], default: 'app' },
 
     // Billing (separate from ecommerce payments)
     diagnosisFee: { type: Number, default: 0 },
@@ -105,10 +111,18 @@ const repairBookingSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
     paymentMethod: { type: String, default: '' },
 
+    // Driver earnings (paid once per completed leg; see utils/repairEarnings.js)
+    pickupEarningCredited: { type: Boolean, default: false },
+    deliveryEarningCredited: { type: Boolean, default: false },
+    pickupCaptainEarnings: { type: Number, default: 0 },
+    deliveryCaptainEarnings: { type: Number, default: 0 },
+
     // Timestamps for milestones
     rideStartedAt: { type: Date, default: null },
     reachedCustomerAt: { type: Date, default: null },
     pickedUpAt: { type: Date, default: null },
+    centerRideStartedAt: { type: Date, default: null },
+    reachedCenterAt: { type: Date, default: null },
     atCenterAt: { type: Date, default: null },
     repairCompletedAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },

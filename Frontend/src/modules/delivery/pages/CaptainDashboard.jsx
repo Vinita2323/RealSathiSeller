@@ -29,9 +29,10 @@ const CaptainDashboard = () => {
     pendingCount: 0,
   });
   const [pendingOrders, setPendingOrders] = useState(() => cachedInit?.pendingOrders || []);
-  const [transportRequests, setTransportRequests] = useState(() => cachedInit?.transportRequests || []);
+  // Transport is no longer part of the captain app: requests / active rides are never shown
+  const [transportRequests, setTransportRequests] = useState([]);
   const [returnPickups, setReturnPickups] = useState([]);
-  const [activeTransport, setActiveTransport] = useState(() => cachedInit?.activeTransport || null);
+  const [activeTransport, setActiveTransport] = useState(null);
   const [taskFilter, setTaskFilter] = useState('all');
   const [cardActionLoading, setCardActionLoading] = useState(null);
   const [weeklyEarnings, setWeeklyEarnings] = useState(() => {
@@ -98,10 +99,10 @@ const CaptainDashboard = () => {
       if (res.status === 'fulfilled' && res.value?.success) {
         const dashData = res.value;
         const orders = dashData.pendingOrders || [];
-        const tRequests = dashData.transportRequests || [];
+        const tRequests = []; // transport requests are ignored
         setPendingOrders(orders);
         setTransportRequests(tRequests);
-        setActiveTransport(dashData.activeTransport || null);
+        setActiveTransport(null);
 
         setStats({
           ...dashData.stats,
@@ -836,6 +837,24 @@ const CaptainDashboard = () => {
                   <p className="text-[10px] font-semibold text-slate-400 mt-1">Pending Tasks</p>
                 </div>
               </div>
+
+              {/* Cash collected from customers that still has to be handed over to the platform */}
+              {Number(stats.outstandingCash || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/captain/cash-collection')}
+                  className="mt-3 w-full flex items-center justify-between gap-2 bg-amber-50 hover:bg-amber-100/70 border border-amber-200 rounded-xl px-3 py-2.5 cursor-pointer text-left transition-colors"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="material-symbols-outlined text-lg text-amber-700">payments</span>
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-bold uppercase tracking-wide text-amber-700">Cash to settle</span>
+                      <span className="block text-[11px] font-medium text-amber-800">Collected from customers — hand over to Sathi Seller</span>
+                    </span>
+                  </span>
+                  <span className="text-base font-black text-amber-900 shrink-0">₹{Number(stats.outstandingCash).toFixed(2)}</span>
+                </button>
+              )}
             </section>
 
             {/* Weekly Activity & Earnings Chart */}
