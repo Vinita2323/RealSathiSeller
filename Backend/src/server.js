@@ -181,12 +181,15 @@ app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 7000;
+// On a server behind nginx set HOST=127.0.0.1 so the API is only reachable through the proxy (not directly from the internet).
+// Leave it unset for local development (listens on all interfaces, e.g. for testing from a phone on your LAN).
+const HOST = process.env.HOST || '';
 
 const httpServer = http.createServer(app);
 initSocket(httpServer);
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'production'} mode on port ${PORT}`);
+httpServer.listen(PORT, ...(HOST ? [HOST] : []), () => {
+  console.log(`Server running in ${process.env.NODE_ENV || 'production'} mode on ${HOST || 'all interfaces'}:${PORT}`);
   const sweepUnpaidOrders = () => {
     releaseAllExpiredPaymentHolds().catch((err) => {
       console.error('[Orders] Failed to release expired payment holds:', err.message);
